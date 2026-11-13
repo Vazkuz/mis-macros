@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Tokens tomados de docs/mockup.html (:root). Nombres iguales al mockup para
+   poder traducir 1:1: var(--acc) → bg-acc / text-acc, etc. */
+@theme {
+  --color-bg: #F3F5F2;
+  --color-card: #FFFFFF;
+  --color-line: #DDE3DC;
+  --color-line2: #EDF0EC;
+  --color-ink: #16201A;
+  --color-muted: #55625A;
+  --color-acc: #1E6B47;
+  --color-acc-soft: #E3EFE8;
+  --color-prot: #2D5BC4;
+  --color-carb: #D08A2E;
+  --color-carb-t: #A85A0C;
+  --color-fat: #7B4AA8;
+  --color-warn-bg: #FBF0E4;
+  --color-warn: #7A3F06;
+
+  /* Colores sueltos que el mockup usa en línea (sin variable en :root). */
+  --color-line-strong: #C9D2C8; /* bordes de inputs, handle del sheet */
+  --color-track: #E8ECE7;       /* fondo de barras de progreso */
+  --color-focus: #BFDCCB;       /* outline de foco */
+  --color-disabled: #B9C7BE;    /* botón deshabilitado, texto sobre fondo oscuro */
+  --color-danger: #B42318;
+
+  /* Alias que usa BottomSheet.tsx (copiado tal cual de Mis Gastos). */
+  --color-surface: var(--color-card);
+  --color-ink-soft: var(--color-muted);
+  --color-chip: var(--color-bg);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3,
+  .num {
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
+}

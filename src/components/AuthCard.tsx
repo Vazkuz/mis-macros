@@ -1,3 +1,5 @@
+import MacroDonut from '@/components/MacroDonut'
+
 // Tarjeta centrada para /login, /activar y /privacidad (sin Shell: ni
 // pestañas ni botón flotante). Logo igual al de la cabecera del Shell.
 // `wide` da más ancho para páginas de texto como /privacidad.
@@ -14,16 +16,7 @@ export default function AuthCard({
         className={`w-full rounded-2xl border border-line bg-card p-6 ${wide ? 'max-w-xl' : 'max-w-sm'}`}
       >
         <div className="mb-6 flex items-center justify-center gap-2 text-xl font-bold">
-          <svg width="30" height="30" viewBox="0 0 28 28" aria-hidden="true">
-            <circle cx="14" cy="14" r="11" fill="none" className="stroke-line" strokeWidth="4" />
-            <path
-              d="M14 3 A11 11 0 0 1 24.5 17.5"
-              fill="none"
-              className="stroke-acc"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-          </svg>
+          <MacroDonut size={30} />
           <span className="num">Mis Macros</span>
         </div>
         {children}

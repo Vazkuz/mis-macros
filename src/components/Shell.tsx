@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Apple, Plus, Ruler, Utensils, type LucideIcon } from 'lucide-react'
+import MacroDonut from '@/components/MacroDonut'
 
 type Tab = {
   href: string
@@ -96,16 +97,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             aria-label="Mis Macros, ir a Hoy"
             className="flex min-h-11 items-center gap-2 text-lg font-bold"
           >
-            <svg width="26" height="26" viewBox="0 0 28 28" aria-hidden="true">
-              <circle cx="14" cy="14" r="11" fill="none" className="stroke-line" strokeWidth="4" />
-              <path
-                d="M14 3 A11 11 0 0 1 24.5 17.5"
-                fill="none"
-                className="stroke-acc"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-            </svg>
+            <MacroDonut size={26} />
             <span className="num">Mis Macros</span>
           </Link>
         </header>

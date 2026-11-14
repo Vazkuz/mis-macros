@@ -26,6 +26,12 @@
   --color-danger: #B42318;
   --color-danger-line: #E8B4AE; /* borde del botón "Eliminar" (.btn.danger) */
 
+  /* Hoy */
+  --color-acc-plan: #9FC7B1;    /* parte "planificada" de la barra de kcal */
+  --color-check: #9AA79F;       /* borde del círculo sin marcar */
+  --color-del: #B4423A;         /* ícono de borrar en la lista */
+  --color-del-bg: #FBEAE8;      /* hover del botón de borrar */
+
   /* Tarjeta oscura de resultado (Meta): línea divisoria y barras de macros
      en tonos claros sobre fondo ink. */
   --color-ink-line: #34413A;

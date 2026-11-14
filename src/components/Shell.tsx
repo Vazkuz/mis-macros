@@ -1,9 +1,11 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Apple, Plus, Ruler, Utensils, type LucideIcon } from 'lucide-react'
 import MacroDonut from '@/components/MacroDonut'
+import HeaderDate from '@/components/HeaderDate'
 import { useCurrentFabAction } from '@/lib/fab'
 
 type Tab = {
@@ -105,6 +107,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <MacroDonut size={26} />
             <span className="num">Mis Macros</span>
           </Link>
+          {/* Selector de fecha solo en Hoy. Suspense: usa useSearchParams. */}
+          {pathname === '/' && (
+            <Suspense fallback={null}>
+              <HeaderDate />
+            </Suspense>
+          )}
         </header>
 
         <main className="flex flex-col gap-3.5 p-4 pb-24 min-[900px]:px-6 min-[900px]:pt-6 min-[900px]:pb-[104px]">

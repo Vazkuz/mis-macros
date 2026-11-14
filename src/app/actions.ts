@@ -6,6 +6,15 @@ import { ACTIVITIES, PACES, todayLima, type Activity, type Pace, type Sex } from
 import { createClient } from '@/utils/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import type { FoodBasis, FoodSource, FoodUnit } from '@/lib/foods'
+import {
+  LOG_SELECT,
+  LOG_SELECT_PLAIN,
+  isIsoDate,
+  isMeal,
+  toFoodLog,
+  type FoodLog,
+  type Meal,
+} from '@/lib/hoy'
 
 export async function signOut() {
   const supabase = await createClient()
@@ -197,5 +206,117 @@ export async function deleteFood(id: string): Promise<FoodResult> {
     return { error: 'No se pudo eliminar el alimento. Inténtalo de nuevo.' }
   }
   revalidatePath('/alimentos')
+  return { ok: true }
+}
+
+// ---------- Hoy: registros de comidas (food_logs) ----------
+// El trigger de la base copia nombre y macros del alimento al insertar o al
+// cambiar quantity/food_id; aquí solo se envía log_date, meal, food_id,
+// quantity y eaten. Cada acción devuelve la fila guardada para reemplazar la
+// optimista del cliente. Sin revalidatePath: el estado optimista del cliente
+// es la fuente de verdad mientras la pantalla está abierta.
+
+type LogResult = { error: string } | { ok: true; log: FoodLog }
+
+const MAX_QTY = 100000
+
+/** Select con el alimento relacionado; si la relación no existe, sin él. */
+async function selectLog(
+  query: (cols: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>
+): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }> {
+  const first = await query(LOG_SELECT)
+  if (!first.error) return first as { data: Record<string, unknown> | null; error: null }
+  const plain = await query(LOG_SELECT_PLAIN)
+  return plain as { data: Record<string, unknown> | null; error: { message: string } | null }
+}
+
+export async function addFoodLog(input: {
+  date: string
+  meal: Meal
+  foodId: string
+  quantity: number
+}): Promise<LogResult> {
+  const { date, meal, foodId, quantity } = input
+  if (!isIsoDate(date) || date > todayLima()) return { error: 'Fecha inválida.' }
+  if (!isMeal(meal)) return { error: 'Elige una comida.' }
+  if (!foodId) return { error: 'Elige un alimento.' }
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_QTY) {
+    return { error: 'Revisa la cantidad.' }
+  }
+
+  const supabase = await createClient()
+
+  // Si ya está ese alimento en esa comida ese día, se suma la cantidad.
+  const { data: existing, error: findError } = await supabase
+    .from('food_logs')
+    .select('id, quantity')
+    .eq('log_date', date)
+    .eq('meal', meal)
+    .eq('food_id', foodId)
+    .order('id')
+    .limit(1)
+    .maybeSingle()
+  if (findError) {
+    console.error('addFoodLog: búsqueda falló:', findError)
+    return { error: 'No se pudo agregar. Inténtalo de nuevo.' }
+  }
+
+  const { data, error } = existing
+    ? await selectLog((cols) =>
+        supabase
+          .from('food_logs')
+          .update({ quantity: Math.round((Number(existing.quantity) + quantity) * 100) / 100 })
+          .eq('id', existing.id)
+          .select(cols)
+          .single()
+      )
+    : await selectLog((cols) =>
+        supabase
+          .from('food_logs')
+          .insert({ log_date: date, meal, food_id: foodId, quantity, eaten: true })
+          .select(cols)
+          .single()
+      )
+  if (error || !data) {
+    console.error('addFoodLog falló:', error)
+    return { error: 'No se pudo agregar. Inténtalo de nuevo.' }
+  }
+  return { ok: true, log: toFoodLog(data) }
+}
+
+export async function updateFoodLogQuantity(id: string, quantity: number): Promise<LogResult> {
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_QTY) {
+    return { error: 'Revisa la cantidad.' }
+  }
+  const supabase = await createClient()
+  const { data, error } = await selectLog((cols) =>
+    supabase.from('food_logs').update({ quantity }).eq('id', id).select(cols).single()
+  )
+  if (error || !data) {
+    console.error('updateFoodLogQuantity falló:', error)
+    return { error: 'No se pudo cambiar la cantidad.' }
+  }
+  return { ok: true, log: toFoodLog(data) }
+}
+
+export async function setFoodLogEaten(id: string, eaten: boolean): Promise<LogResult> {
+  const supabase = await createClient()
+  const { data, error } = await selectLog((cols) =>
+    supabase.from('food_logs').update({ eaten }).eq('id', id).select(cols).single()
+  )
+  if (error || !data) {
+    console.error('setFoodLogEaten falló:', error)
+    return { error: 'No se pudo actualizar.' }
+  }
+  return { ok: true, log: toFoodLog(data) }
+}
+
+export async function deleteFoodLog(id: string): Promise<{ error: string } | { ok: true }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('food_logs').delete().eq('id', id).select('id')
+  if (error || !data?.length) {
+    console.error('deleteFoodLog falló:', error ?? '0 filas eliminadas')
+    return { error: 'No se pudo quitar.' }
+  }
   return { ok: true }
 }

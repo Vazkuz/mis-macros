@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { saveMeta } from '@/app/actions'
 import Toast, { useToast } from '@/components/Toast'
+import type { ProfileData } from '@/lib/profile'
 import {
   ACTIVITIES,
   PACES,
@@ -16,15 +17,7 @@ import {
   type Sex,
 } from '@/lib/metas'
 
-export type MetaProfile = {
-  sex: Sex | null
-  birthDate: string | null
-  heightCm: number | null
-  activity: Activity | null
-  pace: Pace | null
-  proteinPerKg: number | null
-  fatPerKg: number | null
-}
+export type MetaProfile = ProfileData
 
 type Editable = {
   sex: Sex | null

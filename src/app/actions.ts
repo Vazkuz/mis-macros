@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { ACTIVITIES, PACES, todayLima, type Activity, type Pace, type Sex } from '@/lib/metas'
 import { createClient } from '@/utils/supabase/server'
+import { isAdmin } from '@/lib/auth'
+import type { FoodBasis, FoodSource, FoodUnit } from '@/lib/foods'
 
 export async function signOut() {
   const supabase = await createClient()
@@ -97,5 +99,103 @@ export async function saveMeta(input: MetaInput): Promise<{ error: string } | { 
   }
 
   revalidatePath('/meta')
+  return { ok: true }
+}
+
+// ---------- Alimentos (solo admin; RLS con is_admin() es la barrera real) ----------
+
+export type FoodInput = {
+  name: string
+  source: FoodSource
+  basis: FoodBasis
+  unitLabel: FoodUnit
+  gramsPerUnit: number | null
+  protein: number
+  carbs: number
+  fat: number
+  featured: boolean
+}
+
+type FoodResult = { error: string } | { ok: true }
+
+function validateFood(f: FoodInput): string | null {
+  if (!f.name?.trim()) return 'Ponle un nombre al alimento.'
+  if (f.name.trim().length > 120) return 'El nombre es muy largo.'
+  if (!['ins', 'plato', 'producto'].includes(f.source)) return 'Elige la fuente.'
+  if (!['100g', 'unit'].includes(f.basis)) return 'Elige la medida.'
+  if (!['g', 'mL'].includes(f.unitLabel)) return 'Elige la unidad.'
+  if (f.basis === 'unit' && !(f.gramsPerUnit != null && f.gramsPerUnit > 0)) {
+    return 'Pon los gramos por unidad.'
+  }
+  for (const [label, v] of [
+    ['proteína', f.protein],
+    ['carbos', f.carbs],
+    ['grasa', f.fat],
+  ] as const) {
+    if (!Number.isFinite(v) || v < 0 || v > 1000) return `Revisa el valor de ${label}.`
+  }
+  return null
+}
+
+function foodRow(f: FoodInput) {
+  return {
+    name: f.name.trim(),
+    source: f.source,
+    basis: f.basis,
+    unit_label: f.unitLabel,
+    grams_per_unit: f.basis === 'unit' ? f.gramsPerUnit : null,
+    protein: f.protein,
+    carbs: f.carbs,
+    fat: f.fat,
+    featured: f.featured,
+  }
+}
+
+const SIN_PERMISO = 'Solo el administrador puede editar alimentos.'
+
+export async function createFood(input: FoodInput): Promise<FoodResult> {
+  const invalid = validateFood(input)
+  if (invalid) return { error: invalid }
+  if (!(await isAdmin())) return { error: SIN_PERMISO }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('foods').insert(foodRow(input))
+  if (error) {
+    console.error('createFood falló:', error)
+    return { error: 'No se pudo guardar el alimento. Inténtalo de nuevo.' }
+  }
+  revalidatePath('/alimentos')
+  return { ok: true }
+}
+
+export async function updateFood(id: string, input: FoodInput): Promise<FoodResult> {
+  const invalid = validateFood(input)
+  if (invalid) return { error: invalid }
+  if (!(await isAdmin())) return { error: SIN_PERMISO }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('foods')
+    .update(foodRow(input))
+    .eq('id', id)
+    .select('id')
+  if (error || !data?.length) {
+    console.error('updateFood falló:', error ?? '0 filas actualizadas')
+    return { error: 'No se pudieron guardar los cambios. Inténtalo de nuevo.' }
+  }
+  revalidatePath('/alimentos')
+  return { ok: true }
+}
+
+export async function deleteFood(id: string): Promise<FoodResult> {
+  if (!(await isAdmin())) return { error: SIN_PERMISO }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('foods').delete().eq('id', id).select('id')
+  if (error || !data?.length) {
+    console.error('deleteFood falló:', error ?? '0 filas eliminadas')
+    return { error: 'No se pudo eliminar el alimento. Inténtalo de nuevo.' }
+  }
+  revalidatePath('/alimentos')
   return { ok: true }
 }

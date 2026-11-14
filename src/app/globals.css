@@ -24,6 +24,7 @@
   --color-focus: #BFDCCB;       /* outline de foco */
   --color-disabled: #B9C7BE;    /* botón deshabilitado, texto sobre fondo oscuro */
   --color-danger: #B42318;
+  --color-danger-line: #E8B4AE; /* borde del botón "Eliminar" (.btn.danger) */
 
   /* Tarjeta oscura de resultado (Meta): línea divisoria y barras de macros
      en tonos claros sobre fondo ink. */

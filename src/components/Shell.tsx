@@ -4,12 +4,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Apple, Plus, Ruler, Utensils, type LucideIcon } from 'lucide-react'
 import MacroDonut from '@/components/MacroDonut'
+import { useCurrentFabAction } from '@/lib/fab'
 
 type Tab = {
   href: string
   label: string
   icon: React.ReactNode
-  fab?: { label: string; icon: LucideIcon }
+  // needsAction: el botón solo aparece si la página registró su acción con
+  // useFabAction (src/lib/fab.ts). En Alimentos solo lo hace el admin.
+  fab?: { label: string; icon: LucideIcon; needsAction?: boolean }
 }
 
 const svgProps = {
@@ -67,7 +70,7 @@ const TABS: Tab[] = [
         <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
       </svg>
     ),
-    fab: { label: 'Nuevo alimento', icon: Apple },
+    fab: { label: 'Nuevo alimento', icon: Apple, needsAction: true },
   },
 ]
 
@@ -81,7 +84,8 @@ function isActive(pathname: string, href: string) {
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const current = TABS.find((t) => isActive(pathname, t.href))
-  const fab = current?.fab
+  const fabAction = useCurrentFabAction()
+  const fab = current?.fab && (!current.fab.needsAction || fabAction) ? current.fab : undefined
 
   // /login, /activar y /privacidad van sin cabecera, pestañas ni botón flotante.
   // (Este return va después de todos los hooks.)
@@ -139,6 +143,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           aria-label={fab.label}
+          onClick={() => fabAction?.()}
           className="fixed right-4 bottom-[calc(80px+env(safe-area-inset-bottom))] z-[35] inline-flex h-14 cursor-pointer items-center gap-0.5 rounded-[18px] bg-acc px-4 text-white shadow-[0_10px_24px_-8px_rgba(22,32,26,.55)] min-[900px]:right-6 min-[900px]:bottom-6"
         >
           <Plus size={20} strokeWidth={2.75} aria-hidden="true" />

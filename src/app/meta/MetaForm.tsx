@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { saveMeta } from '@/app/actions'
+import Toast, { useToast } from '@/components/Toast'
 import {
   ACTIVITIES,
   PACES,
@@ -82,14 +83,8 @@ export default function MetaForm({
   const [form, setForm] = useState<Editable>(() => toEditable(initial))
   const [weightInput, setWeightInput] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
   const [isPending, startTransition] = useTransition()
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-  }, [])
-
   const weightKg = lastMeasurement?.weightKg ?? parseNum(weightInput)
 
   const goals = useMemo(
@@ -113,12 +108,6 @@ export default function MetaForm({
   const set = <K extends keyof Editable>(key: K, value: Editable[K]) => {
     setForm((f) => ({ ...f, [key]: value }))
     setError(null)
-  }
-
-  function showToast(text: string) {
-    setToast(text)
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(null), 1600)
   }
 
   function handleSave() {
@@ -151,7 +140,7 @@ export default function MetaForm({
       setBaseline(form)
       setWeightInput('')
       router.refresh()
-      showToast('Meta guardada')
+      toast.show('Meta guardada')
     })
   }
 
@@ -426,15 +415,7 @@ export default function MetaForm({
         {footer}
       </div>
 
-      <div
-        role="status"
-        aria-live="polite"
-        className={`pointer-events-none fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 rounded-[10px] bg-ink px-4 py-2.5 text-sm text-white transition-opacity duration-200 min-[900px]:bottom-8 ${
-          toast ? 'opacity-100' : 'opacity-0'
-        }`}
-      >
-        {toast}
-      </div>
+      <Toast text={toast.text} />
     </div>
   )
 }

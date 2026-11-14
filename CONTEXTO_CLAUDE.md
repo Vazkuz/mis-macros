@@ -19,12 +19,15 @@ Mismo stack que Mis Gastos (`C:\Users\canad\mis-gastos`):
 
 | Ruta | Pestaña | Botón flotante |
 |---|---|---|
-| `/` | Hoy | + Utensils ("Agregar comida") |
+| `/` | Hoy | + Utensils ("Agregar comida") → abre `/agregar` |
 | `/progreso` | Peso y cintura | + Ruler ("Nueva medición") |
 | `/alimentos` | Alimentos | + Apple ("Nuevo alimento") |
 | `/meta` | Meta | sin botón |
+| `/agregar?meal=…&d=…` | (pantalla completa, sin Shell) | — |
 
-El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" (lleva a Hoy), barra de pestañas inferior en móvil que pasa a riel lateral desde 900px, y botón flotante contextual.
+El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" (lleva a Hoy), barra de pestañas inferior en móvil que pasa a riel lateral desde 900px, y botón flotante contextual. `/login`, `/activar`, `/privacidad` y `/agregar` se pintan sin Shell.
+
+`/agregar` reemplaza al sheet de agregar: columna con la altura visible (Android: `interactiveWidget: 'resizes-content'` en el viewport raíz; iOS: sigue a `visualViewport`), cabecera fija y solo la lista se desplaza. La lógica optimista de registros vive en `src/lib/useFoodLogs.ts` (la usan Hoy y /agregar).
 
 ## Archivos clave
 

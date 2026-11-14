@@ -281,6 +281,10 @@ export async function addFoodLog(input: {
     console.error('addFoodLog falló:', error)
     return { error: 'No se pudo agregar. Inténtalo de nuevo.' }
   }
+  // Se agrega desde /agregar: en una server action, revalidatePath también
+  // limpia la caché del router del cliente, así Hoy se ve al día al volver
+  // (incluso con el botón atrás del navegador).
+  revalidatePath('/')
   return { ok: true, log: toFoodLog(data) }
 }
 

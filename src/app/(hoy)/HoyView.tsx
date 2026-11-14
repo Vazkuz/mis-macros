@@ -1,44 +1,17 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Check, Trash2 } from 'lucide-react'
-import {
-  addFoodLog,
-  deleteFoodLog,
-  setFoodLogEaten,
-  updateFoodLogQuantity,
-} from '@/app/actions'
 import Toast, { useToast } from '@/components/Toast'
 import { useFabAction } from '@/lib/fab'
-import { round1, type Food } from '@/lib/foods'
+import { round1 } from '@/lib/foods'
 import type { Goals } from '@/lib/metas'
-import {
-  MEALS,
-  MEAL_LABEL,
-  equivalence,
-  macrosFor,
-  qtyUnit,
-  type FoodLog,
-  type Meal,
-} from '@/lib/hoy'
-import AddSheet from './AddSheet'
+import { MEALS, MEAL_LABEL, equivalence, qtyUnit, type FoodLog, type Meal } from '@/lib/hoy'
+import { isTempLog, useFoodLogs } from '@/lib/useFoodLogs'
 
 const fmt = (n: number) => Math.round(n).toLocaleString('es-PE')
-const isTemp = (id: string) => id.startsWith('tmp-')
-
-/** Escala macros y kcal de un registro a otra cantidad (para el optimista). */
-function scaled(log: FoodLog, quantity: number): FoodLog {
-  const k = log.quantity > 0 ? quantity / log.quantity : 0
-  return {
-    ...log,
-    quantity,
-    protein: log.protein * k,
-    carbs: log.carbs * k,
-    fat: log.fat * k,
-    kcal: log.kcal * k,
-  }
-}
 
 export default function HoyView({
   date,
@@ -47,7 +20,6 @@ export default function HoyView({
   loadError,
   goals,
   defaultMeal,
-  isAdmin,
 }: {
   date: string
   isToday: boolean
@@ -55,16 +27,26 @@ export default function HoyView({
   loadError: boolean
   goals: Goals | null
   defaultMeal: Meal
-  isAdmin: boolean
 }) {
-  const [logs, setLogs] = useState<FoodLog[]>(initialLogs)
+  const router = useRouter()
   const [meal, setMeal] = useState<Meal>(defaultMeal)
-  const [sheetOpen, setSheetOpen] = useState(false)
   const toast = useToast()
-  const tempSeq = useRef(0)
+  const { logs, toggle, changeQty, remove } = useFoodLogs(initialLogs, date, toast.show)
 
-  const openSheet = useCallback(() => setSheetOpen(true), [])
-  useFabAction(openSheet)
+  // El botón flotante abre /agregar con la comida y la fecha actuales.
+  const agregarHref = `/agregar?meal=${meal}&d=${date}`
+  const hrefRef = useRef(agregarHref)
+  useEffect(() => {
+    hrefRef.current = agregarHref
+    router.prefetch(agregarHref)
+  }, [agregarHref, router])
+  const openAgregar = useCallback(() => router.push(hrefRef.current), [router])
+  useFabAction(openAgregar)
+
+  function removeWithToast(log: FoodLog) {
+    remove(log)
+    toast.show(`${log.food_name} quitado`)
+  }
 
   // ---------- Totales ----------
   const totals = useMemo(() => {
@@ -93,93 +75,6 @@ export default function HoyView({
     (a, l) => ({ p: a.p + l.protein, c: a.c + l.carbs, g: a.g + l.fat }),
     { p: 0, c: 0, g: 0 }
   )
-
-  // ---------- Mutaciones optimistas ----------
-  const put = (log: FoodLog) => setLogs((ls) => ls.map((l) => (l.id === log.id ? log : l)))
-
-  function toggle(log: FoodLog) {
-    const next = { ...log, eaten: !log.eaten }
-    put(next)
-    setFoodLogEaten(log.id, next.eaten).then((res) => {
-      if ('error' in res) {
-        put(log)
-        toast.show(res.error)
-      } else put(res.log)
-    })
-  }
-
-  function changeQty(log: FoodLog, quantity: number) {
-    if (quantity === log.quantity) return
-    put(scaled(log, quantity))
-    updateFoodLogQuantity(log.id, quantity).then((res) => {
-      if ('error' in res) {
-        put(log)
-        toast.show(res.error)
-      } else put(res.log)
-    })
-  }
-
-  function remove(log: FoodLog) {
-    const index = logs.findIndex((l) => l.id === log.id)
-    setLogs((ls) => ls.filter((l) => l.id !== log.id))
-    toast.show(`${log.food_name} quitado`)
-    deleteFoodLog(log.id).then((res) => {
-      if ('error' in res) {
-        setLogs((ls) => {
-          const copy = [...ls]
-          copy.splice(Math.min(index, copy.length), 0, log)
-          return copy
-        })
-        toast.show(res.error)
-      }
-    })
-  }
-
-  function add(food: Food, quantity: number, toMeal: Meal) {
-    const existing = logs.find((l) => l.meal === toMeal && l.food_id === food.id)
-    let optimisticId: string
-    if (existing) {
-      optimisticId = existing.id
-      put(scaled(existing, Math.round((existing.quantity + quantity) * 100) / 100))
-    } else {
-      optimisticId = `tmp-${++tempSeq.current}`
-      const m = macrosFor(food, quantity)
-      setLogs((ls) => [
-        ...ls,
-        {
-          id: optimisticId,
-          meal: toMeal,
-          food_id: food.id,
-          food_name: food.name,
-          quantity,
-          eaten: true,
-          ...m,
-          basis: food.basis,
-          unit_label: food.unit_label,
-          grams_per_unit: food.grams_per_unit,
-        },
-      ])
-    }
-    toast.show(`${food.name} agregado a ${MEAL_LABEL[toMeal]}`)
-
-    addFoodLog({ date, meal: toMeal, foodId: food.id, quantity }).then((res) => {
-      if ('error' in res) {
-        if (existing) put(existing)
-        else setLogs((ls) => ls.filter((l) => l.id !== optimisticId))
-        toast.show(res.error)
-        return
-      }
-      // Reemplaza la fila optimista por la guardada (puede ser otra fila si
-      // el servidor la sumó a una existente que aún no teníamos).
-      setLogs((ls) => {
-        const without = ls.filter((l) => l.id !== optimisticId && l.id !== res.log.id)
-        const at = ls.findIndex((l) => l.id === optimisticId || l.id === res.log.id)
-        const copy = [...without]
-        copy.splice(at < 0 ? copy.length : Math.min(at, copy.length), 0, res.log)
-        return copy
-      })
-    })
-  }
 
   // ---------- Render ----------
   const goal = goals?.kcal ?? 0
@@ -322,7 +217,7 @@ export default function HoyView({
                   log={log}
                   onToggle={() => toggle(log)}
                   onQty={(q) => changeQty(log, q)}
-                  onDelete={() => remove(log)}
+                  onDelete={() => removeWithToast(log)}
                 />
               ))}
             </ul>
@@ -341,15 +236,6 @@ export default function HoyView({
         </section>
       </div>
 
-      <AddSheet
-        open={sheetOpen}
-        meal={meal}
-        onMealChange={setMeal}
-        onClose={() => setSheetOpen(false)}
-        onAdd={add}
-        isAdmin={isAdmin}
-      />
-
       <Toast text={toast.text} />
     </>
   )
@@ -366,7 +252,7 @@ function LogRow({
   onQty: (q: number) => void
   onDelete: () => void
 }) {
-  const pending = isTemp(log.id)
+  const pending = isTempLog(log.id)
   const eq = equivalence(log, log.quantity)
   return (
     <li className="grid grid-cols-[44px_1fr_auto] items-center gap-1.5 border-t border-line2 py-2.5 first:border-t-0">

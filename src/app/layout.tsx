@@ -24,6 +24,9 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // Android: con el teclado abierto la página se achica (no solo el
+  // visualViewport). En iOS no aplica; /agregar usa visualViewport.
+  interactiveWidget: 'resizes-content',
   themeColor: '#FFFFFF',
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
 import BottomSheet from '@/components/BottomSheet'
@@ -107,139 +107,199 @@ export default function AddSheet({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [open, hasDraft])
 
+  // ---------- Alto del contenedor ----------
+  // Solo la lista de resultados hace scroll: el contenedor tiene un alto fijo
+  // que llena el sheet SIN que el div scrolleable de BottomSheet desborde
+  // (si desbordara, se movería todo el sheet). Se mide en vez de adivinar:
+  //   alto = 85% de la ventana (tope del wrapper) − lo que el wrapper pone
+  //          arriba de este contenedor (padding, agarre, título) − su padding
+  //          de abajo.
+  // Con el teclado abierto (visualViewport más bajo que la ventana) además se
+  // limita al borde visible, para que el buscador nunca quede tapado y la
+  // lista siga siendo lo único que se desplaza.
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [boxH, setBoxH] = useState<number | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const vv = window.visualViewport
+    let raf = 0
+
+    const measure = () => {
+      const box = boxRef.current
+      const wrapper = box?.parentElement
+      if (!box || !wrapper) return
+      const boxTop = box.getBoundingClientRect().top
+      // Diferencia de posiciones: no le afecta el translateY de la animación.
+      const above = boxTop - wrapper.getBoundingClientRect().top + wrapper.scrollTop
+      const below = parseFloat(getComputedStyle(wrapper).paddingBottom) || 0
+      let h = window.innerHeight * 0.85 - above - below
+      if (vv && window.innerHeight - vv.height > 100) {
+        const visibleBottom = vv.offsetTop + vv.height
+        h = Math.min(h, visibleBottom - boxTop - below)
+      }
+      setBoxH(Math.max(160, Math.floor(h) - 2))
+    }
+    const schedule = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(measure)
+    }
+
+    schedule()
+    vv?.addEventListener('resize', schedule)
+    vv?.addEventListener('scroll', schedule)
+    window.addEventListener('resize', schedule)
+    return () => {
+      cancelAnimationFrame(raf)
+      vv?.removeEventListener('resize', schedule)
+      vv?.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+    }
+  }, [open])
+
   const info = selected && qtyOk ? macrosFor(selected, q) : null
   const eq = selected && qtyOk ? equivalence(selected, q) : null
   const unit = selected ? (selected.basis === 'unit' ? 'u' : selected.unit_label) : '—'
 
   return (
     <BottomSheet open={open} onClose={close} title={`Agregar a ${MEAL_LABEL[meal]}`}>
-      {/* Alto fijo desde que abre (~78vh, llega al tope de 85vh del sheet) y
-          sin cajas anidadas: todo plano, al ancho completo. Los resultados
-          ocupan lo que sobra. */}
-      <div className="flex min-h-[78vh] flex-col gap-2.5">
-        {/* Siempre en una fila, repartiendo el ancho en partes iguales (cabe en ~360px). */}
-        <div className="flex flex-nowrap gap-1.5" role="group" aria-label="Comida">
-          {MEALS.map((m) => {
-            const on = m.value === meal
-            return (
-              <button
-                key={m.value}
-                type="button"
-                aria-pressed={on}
-                onClick={() => onMealChange(m.value)}
-                className={`h-9 min-w-0 flex-1 cursor-pointer rounded-full border px-1 text-[13px] font-semibold whitespace-nowrap ${
-                  on ? 'border-acc bg-acc text-white' : 'border-line-strong bg-card'
-                }`}
-              >
-                {m.label}
-              </button>
-            )
-          })}
-        </div>
+      {/* Alto fijo medido (ver arriba). Arriba, todo fijo (flex: none); la
+          lista de resultados es lo único que hace scroll. Plano, sin cajas
+          anidadas, al ancho completo. */}
+      <div
+        ref={boxRef}
+        className="flex flex-col gap-2.5"
+        style={{ height: boxH ?? 'calc(85vh - 112px)' }}
+      >
+        <div className="flex flex-none flex-col gap-2.5">
+          {/* Siempre en una fila, repartiendo el ancho en partes iguales (cabe en ~360px). */}
+          <div className="flex flex-nowrap gap-1.5" role="group" aria-label="Comida">
+            {MEALS.map((m) => {
+              const on = m.value === meal
+              return (
+                <button
+                  key={m.value}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => onMealChange(m.value)}
+                  className={`h-9 min-w-0 flex-1 cursor-pointer rounded-full border px-1 text-[13px] font-semibold whitespace-nowrap ${
+                    on ? 'border-acc bg-acc text-white' : 'border-line-strong bg-card'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              )
+            })}
+          </div>
 
-        <div className="relative">
-          <Search
-            size={16}
-            strokeWidth={2.2}
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted"
-          />
-          <input
-            ref={searchRef}
-            type="search"
-            autoComplete="off"
-            placeholder="Busca un alimento (camote, ceviche…)"
-            role="combobox"
-            aria-label="Buscar alimento"
-            aria-expanded={showList}
-            aria-controls="add-results"
-            aria-autocomplete="list"
-            aria-activedescendant={showList && shown[hi] ? `add-opt-${hi}` : undefined}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setSelected(null)
-              setQty('')
-              setHi(0)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                if (shown.length) setHi((h) => (h + 1) % shown.length)
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                if (shown.length) setHi((h) => (h - 1 + shown.length) % shown.length)
-              } else if (e.key === 'Enter') {
-                e.preventDefault()
-                if (showList && shown[hi]) pick(shown[hi])
-              }
-            }}
-            // text-base (16px) a propósito: con menos, iOS hace zoom al enfocar.
-            className="h-10 w-full rounded-[10px] border-[1.5px] border-acc bg-card pr-3 pl-9 text-base focus:outline-3 focus:outline-focus"
-          />
-        </div>
-
-        <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-          <div className="flex h-10 items-center overflow-hidden rounded-[10px] border border-line-strong bg-card focus-within:outline-3 focus-within:outline-focus">
+          <div className="relative">
+            <Search
+              size={16}
+              strokeWidth={2.2}
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted"
+            />
             <input
-              ref={qtyRef}
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="any"
-              placeholder="Cantidad"
-              aria-label="Cantidad"
-              disabled={!selected}
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
+              ref={searchRef}
+              type="search"
+              autoComplete="off"
+              placeholder="Busca un alimento (camote, ceviche…)"
+              role="combobox"
+              aria-label="Buscar alimento"
+              aria-expanded={showList}
+              aria-controls="add-results"
+              aria-autocomplete="list"
+              aria-activedescendant={showList && shown[hi] ? `add-opt-${hi}` : undefined}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value)
+                setSelected(null)
+                setQty('')
+                setHi(0)
+              }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'ArrowDown') {
                   e.preventDefault()
-                  add()
+                  if (shown.length) setHi((h) => (h + 1) % shown.length)
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  if (shown.length) setHi((h) => (h - 1 + shown.length) % shown.length)
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (showList && shown[hi]) pick(shown[hi])
                 }
               }}
-              // 16px a propósito (evita el zoom de iOS al enfocar).
-              className="h-[38px] w-full min-w-0 bg-transparent px-2.5 text-right text-base outline-none disabled:opacity-60"
+              // text-base (16px) a propósito: con menos, iOS hace zoom al enfocar.
+              className="h-10 w-full rounded-[10px] border-[1.5px] border-acc bg-card pr-3 pl-9 text-base focus:outline-3 focus:outline-focus"
             />
-            <span className="pr-2.5 pl-1 text-sm font-semibold whitespace-nowrap text-muted">
-              {unit}
-            </span>
           </div>
-          <button
-            type="button"
-            onClick={add}
-            disabled={!selected || !qtyOk}
-            className="h-10 cursor-pointer rounded-[10px] bg-acc px-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-disabled"
-          >
-            Agregar
-          </button>
+
+          <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+            <div className="flex h-10 items-center overflow-hidden rounded-[10px] border border-line-strong bg-card focus-within:outline-3 focus-within:outline-focus">
+              <input
+                ref={qtyRef}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                placeholder="Cantidad"
+                aria-label="Cantidad"
+                disabled={!selected}
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    add()
+                  }
+                }}
+                // 16px a propósito (evita el zoom de iOS al enfocar).
+                className="h-[38px] w-full min-w-0 bg-transparent px-2.5 text-right text-base outline-none disabled:opacity-60"
+              />
+              <span className="pr-2.5 pl-1 text-sm font-semibold whitespace-nowrap text-muted">
+                {unit}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={add}
+              disabled={!selected || !qtyOk}
+              className="h-10 cursor-pointer rounded-[10px] bg-acc px-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-disabled"
+            >
+              Agregar
+            </button>
+          </div>
+
+          <p className="text-[13px] text-muted" aria-live="polite">
+            {info && selected ? (
+              <>
+                <b className="text-ink">{fmt(info.kcal)} kcal</b> · P {round1(info.protein)} g · C{' '}
+                {round1(info.carbs)} g · G {round1(info.fat)} g
+                {eq && <span className="font-semibold text-acc"> · {eq}</span>} →{' '}
+                <b className="text-ink">{MEAL_LABEL[meal]}</b>
+              </>
+            ) : (
+              'Elige un alimento para ver sus macros.'
+            )}
+          </p>
+          <p className="text-xs text-muted [@media(hover:none)]:hidden">
+            Escribe → <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd> + <Kbd>Enter</Kbd> elige → cantidad → <Kbd>Enter</Kbd> agrega.{' '}
+            <Kbd>Esc</Kbd> cancela.
+          </p>
         </div>
 
-        <p className="text-[13px] text-muted" aria-live="polite">
-          {info && selected ? (
-            <>
-              <b className="text-ink">{fmt(info.kcal)} kcal</b> · P {round1(info.protein)} g · C{' '}
-              {round1(info.carbs)} g · G {round1(info.fat)} g
-              {eq && <span className="font-semibold text-acc"> · {eq}</span>} →{' '}
-              <b className="text-ink">{MEAL_LABEL[meal]}</b>
-            </>
-          ) : (
-            'Elige un alimento para ver sus macros.'
-          )}
-        </p>
-        <p className="text-xs text-muted [@media(hover:none)]:hidden">
-          Escribe → <Kbd>↑</Kbd>
-          <Kbd>↓</Kbd> + <Kbd>Enter</Kbd> elige → cantidad → <Kbd>Enter</Kbd> agrega.{' '}
-          <Kbd>Esc</Kbd> cancela.
-        </p>
-
-        {/* Resultados: lista simple separada por líneas finas, ocupa el resto. */}
-        {showList && (
+        {/* Resultados: lo único que hace scroll. flex: 1 + min-height: 0 para
+            que se ajuste al alto que sobra; overscroll contenido para no
+            arrastrar la página. vaul no arrastra el sheet mientras esta lista
+            no esté en el tope (shouldDrag revisa el scrollTop de los
+            ancestros scrolleables). */}
+        {showList ? (
           <ul
             id="add-results"
             role="listbox"
             aria-label="Resultados"
-            className="m-0 flex flex-1 list-none flex-col divide-y divide-line2 border-t border-line2 p-0"
+            className="m-0 flex min-h-0 flex-1 list-none flex-col divide-y divide-line2 overflow-y-auto overscroll-contain border-t border-line2 p-0"
           >
             {status === 'loading' ? (
               <li className="py-2 text-sm text-muted">Cargando alimentos…</li>
@@ -297,6 +357,8 @@ export default function AddSheet({
               ))
             )}
           </ul>
+        ) : (
+          <div className="min-h-0 flex-1" aria-hidden="true" />
         )}
       </div>
     </BottomSheet>

@@ -24,6 +24,7 @@ const svgProps = {
 }
 
 // Íconos de pestañas copiados del mockup (docs/mockup.html).
+// Orden: Hoy, Peso y cintura, Meta, Alimentos.
 const TABS: Tab[] = [
   {
     href: '/',
@@ -47,17 +48,6 @@ const TABS: Tab[] = [
     fab: { label: 'Nueva medición', icon: Ruler },
   },
   {
-    href: '/alimentos',
-    label: 'Alimentos',
-    icon: (
-      <svg {...svgProps}>
-        <ellipse cx="12" cy="6" rx="7" ry="3" />
-        <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
-      </svg>
-    ),
-    fab: { label: 'Nuevo alimento', icon: Apple },
-  },
-  {
     href: '/meta',
     label: 'Meta',
     icon: (
@@ -67,6 +57,17 @@ const TABS: Tab[] = [
         <circle cx="12" cy="12" r="0.5" />
       </svg>
     ),
+  },
+  {
+    href: '/alimentos',
+    label: 'Alimentos',
+    icon: (
+      <svg {...svgProps}>
+        <ellipse cx="12" cy="6" rx="7" ry="3" />
+        <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+      </svg>
+    ),
+    fab: { label: 'Nuevo alimento', icon: Apple },
   },
 ]
 
@@ -108,9 +109,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] min-[900px]:top-0 min-[900px]:right-auto min-[900px]:w-[104px] min-[900px]:border-t-0 min-[900px]:border-r">
+        {/* Cada <Link> ocupa su celda completa (sin padding ni gap alrededor):
+            toda la celda es clickeable. 4 columnas iguales en móvil; una
+            columna en el riel desde 900px. */}
         <nav
           aria-label="Principal"
-          className="mx-auto grid max-w-[560px] grid-cols-4 min-[900px]:auto-rows-min min-[900px]:grid-cols-1 min-[900px]:gap-1 min-[900px]:px-2 min-[900px]:pt-[84px]"
+          className="mx-auto grid max-w-[560px] grid-cols-4 min-[900px]:auto-rows-min min-[900px]:grid-cols-1 min-[900px]:pt-[84px]"
         >
           {TABS.map((tab) => {
             const active = tab === current
@@ -119,12 +123,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 key={tab.href}
                 href={tab.href}
                 aria-current={active ? 'page' : undefined}
-                className={`flex min-h-16 flex-col items-center justify-center gap-1 text-center text-xs font-semibold min-[900px]:min-h-[72px] min-[900px]:rounded-xl ${
+                className={`flex h-full min-h-16 w-full min-w-0 cursor-pointer flex-col items-center justify-center gap-1 px-1 text-center text-xs leading-tight font-semibold select-none [-webkit-tap-highlight-color:transparent] active:bg-acc-soft min-[900px]:min-h-[72px] ${
                   active ? 'text-acc min-[900px]:bg-acc-soft' : 'text-muted'
                 }`}
               >
                 {tab.icon}
-                {tab.label}
+                <span>{tab.label}</span>
               </Link>
             )
           })}

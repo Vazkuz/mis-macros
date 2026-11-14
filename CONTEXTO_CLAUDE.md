@@ -34,11 +34,13 @@ El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" 
 
 ## Auth e invitaciones
 
-Correo + contraseña con Supabase Auth. La app es **solo por invitación**: el perfil (`profiles`) **solo se crea al canjear un código** con la RPC `redeem_invite(p_code)`. Esquema en Supabase: tablas `profiles`, `invite_codes`, `admins`; funciones `redeem_invite(p_code text)`, `is_member()`, `is_admin()`.
+**Login solo con Google** (Supabase Auth, provider `google`). No hay correo/contraseña. La app es **solo por invitación**: el perfil (`profiles`) **solo se crea al canjear un código** con la RPC `redeem_invite(p_code)`. Esquema en Supabase: tablas `profiles`, `invite_codes`, `admins`; funciones `redeem_invite(p_code text)`, `is_member()`, `is_admin()`.
 
 Flujo:
 
-1. `/login` (`src/app/login/page.tsx`): pestañas "Ingresar" (`signInWithPassword`) y "Crear cuenta" (`signUp`, contraseña mínimo 8 + "Repite tu contraseña"). Errores mapeados por `error.code` a español. Si "Confirm email" está activo, `signUp` no da sesión: se avisa que revise su correo, y el enlace vuelve por `/auth/callback` (`exchangeCodeForSession`).
+1. `/login` (`src/app/login/page.tsx` + `GoogleButton.tsx`): tarjeta con el logo y un único botón "Continuar con Google" → `signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}/auth/callback` } })`.
+   `/auth/callback` (`src/app/auth/callback/route.ts`) hace `exchangeCodeForSession(code)` y redirige a `/` (el proxy desvía a `/activar` si no hay perfil). Si falla → `/login?error=auth`, que muestra "No se pudo iniciar sesión con Google. Inténtalo de nuevo."
+   **En Supabase (Authentication → URL Configuration → Redirect URLs) tiene que estar la URL del callback por cada dominio** donde corra la app: `http://localhost:3000/auth/callback`, la de producción en Vercel y, si se usan, las de preview. Si falta, Supabase redirige al Site URL y el login no vuelve a la app.
 2. `/activar` (`src/app/activar/page.tsx`): pide el código y llama a la server action `redeemInviteCode` (`src/app/actions.ts`) → `rpc('redeem_invite', { p_code })`. Si falla: "Código inválido o ya usado". Si sale bien: `redirect('/')`.
 3. `src/proxy.ts` → `updateSession` (`src/utils/supabase/proxy.ts`) en cada request: refresca la sesión y redirige.
    - sin sesión (o `getUser` con error) → `/login`

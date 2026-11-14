@@ -32,9 +32,30 @@ El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" 
 - `src/lib/bodyScrollLock.ts` (`useLockBodyScroll`) y `src/lib/centerDialogLayer.ts` — copiados tal cual de Mis Gastos (BottomSheet depende de ambos).
 - `src/utils/supabase/client.ts` y `server.ts` — clientes browser/server con `@supabase/ssr`.
 
+## Auth e invitaciones
+
+Correo + contraseña con Supabase Auth. La app es **solo por invitación**: el perfil (`profiles`) **solo se crea al canjear un código** con la RPC `redeem_invite(p_code)`. Esquema en Supabase: tablas `profiles`, `invite_codes`, `admins`; funciones `redeem_invite(p_code text)`, `is_member()`, `is_admin()`.
+
+Flujo:
+
+1. `/login` (`src/app/login/page.tsx`): pestañas "Ingresar" (`signInWithPassword`) y "Crear cuenta" (`signUp`, contraseña mínimo 8 + "Repite tu contraseña"). Errores mapeados por `error.code` a español. Si "Confirm email" está activo, `signUp` no da sesión: se avisa que revise su correo, y el enlace vuelve por `/auth/callback` (`exchangeCodeForSession`).
+2. `/activar` (`src/app/activar/page.tsx`): pide el código y llama a la server action `redeemInviteCode` (`src/app/actions.ts`) → `rpc('redeem_invite', { p_code })`. Si falla: "Código inválido o ya usado". Si sale bien: `redirect('/')`.
+3. `src/proxy.ts` → `updateSession` (`src/utils/supabase/proxy.ts`) en cada request: refresca la sesión y redirige.
+   - sin sesión (o `getUser` con error) → `/login`
+   - con sesión y `is_member()` ≠ true → `/activar`
+   - con sesión y perfil en `/login` o `/activar` → `/`
+   - `/auth/callback` pasa siempre. El matcher excluye `_next/static`, `_next/image` y archivos estáticos.
+4. `isAdmin()` (`src/lib/auth.ts`, solo servidor) → `rpc('is_admin')`. Para mostrar el + y "Editar" de Alimentos solo al admin. La seguridad real la ponen las policies.
+5. `signOut` (server action) → botón "Cerrar sesión" al final de `/meta` (con el correo del usuario) y en `/activar`.
+
+`/login` y `/activar` se pintan sin Shell (sin cabecera, pestañas ni botón flotante), con `src/components/AuthCard.tsx`.
+
+**Ojo:** `proxy.ts` va en `src/`, no en la raíz. En la raíz compila y nunca se ejecuta, sin aviso.
+
 ## Reglas
 
 - **BottomSheet único sobre vaul.** Todo bottom sheet de la app usa `src/components/BottomSheet.tsx`. No se usa vaul directo ni otra librería. Si mañana se cambia de librería, solo se toca ese archivo.
+- **`redirect()` siempre fuera de cualquier `try/catch`.** Internamente lanza; dentro de un try se traga como si fuera un error. En el cliente, si se llama a una action que redirige dentro de un try, usar `unstable_rethrow(err)` al inicio del catch.
 - **Todos los hooks van antes de cualquier `return null`** (o cualquier return temprano). Un return antes de un hook rompe el orden de hooks de React.
 - **`.env.local` nunca se sube.** Está en `.gitignore`. La plantilla es `.env.local.example` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`).
 - **El SQL se corre a mano en el SQL Editor de Supabase.** Nada de migraciones automáticas desde la app ni desde Code: el SQL se escribe en el repo y Daniel lo ejecuta en el panel.

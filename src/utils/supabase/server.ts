@@ -11,8 +11,8 @@ export async function createClient() {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
           // Desde un Server Component no se pueden escribir cookies: el try
-          // evita que reviente. El refresco de sesión lo hará el proxy
-          // (src/proxy.ts) cuando se agregue el login.
+          // evita que reviente. El refresco de sesión lo hace el proxy
+          // (src/proxy.ts) en cada request.
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options))

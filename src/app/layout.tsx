@@ -34,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es-PE" className={`${inter.variable} ${spaceGrotesk.variable} antialiased`}>
-      <body className="min-h-screen bg-bg text-ink min-[900px]:pl-[104px]">
+      <body className="min-h-screen bg-bg text-ink">
         <Shell>{children}</Shell>
       </body>
     </html>

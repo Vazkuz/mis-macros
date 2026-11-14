@@ -69,6 +69,8 @@ const TABS: Tab[] = [
   },
 ]
 
+const AUTH_ROUTES = ['/login', '/activar']
+
 function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`)
 }
@@ -78,8 +80,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const current = TABS.find((t) => isActive(pathname, t.href))
   const fab = current?.fab
 
+  // /login y /activar van sin cabecera, pestañas ni botón flotante.
+  // (Este return va después de todos los hooks.)
+  if (AUTH_ROUTES.some((r) => pathname.startsWith(r))) {
+    return <>{children}</>
+  }
+
   return (
-    <>
+    <div className="min-[900px]:pl-[104px]">
       <div className="mx-auto min-h-screen max-w-[520px] pb-[calc(84px+env(safe-area-inset-bottom))] min-[900px]:max-w-[1180px] min-[900px]:pb-8">
         <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-line bg-card px-4 py-2.5">
           <Link
@@ -140,6 +148,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <fab.icon size={22} strokeWidth={2} aria-hidden="true" />
         </button>
       )}
-    </>
+    </div>
   )
 }

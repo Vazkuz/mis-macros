@@ -1,0 +1,20 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+
+// Destino del enlace de confirmación de correo (si en Supabase está activo
+// "Confirm email"). Canjea el code por una sesión y deja que el proxy decida
+// a dónde ir (/activar si aún no tiene perfil).
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+
+  if (code) {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      return NextResponse.redirect(`${origin}/`)
+    }
+  }
+
+  return NextResponse.redirect(`${origin}/login`)
+}

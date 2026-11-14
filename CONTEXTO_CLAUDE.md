@@ -46,7 +46,7 @@ Flujo:
    - sin sesión (o `getUser` con error) → `/login`
    - con sesión y `is_member()` ≠ true → `/activar`
    - con sesión y perfil en `/login` o `/activar` → `/`
-   - `/auth/callback` pasa siempre. El matcher excluye `_next/static`, `_next/image` y archivos estáticos.
+   - `/auth/callback` y `/privacidad` (pública, enlazada desde `/login`) pasan siempre. El matcher excluye `_next/static`, `_next/image` y archivos estáticos.
 4. `isAdmin()` (`src/lib/auth.ts`, solo servidor) → `rpc('is_admin')`. Para mostrar el + y "Editar" de Alimentos solo al admin. La seguridad real la ponen las policies.
 5. `signOut` (server action) → botón "Cerrar sesión" al final de `/meta` (con el correo del usuario) y en `/activar`.
 

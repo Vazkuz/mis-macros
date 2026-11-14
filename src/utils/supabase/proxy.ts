@@ -79,8 +79,9 @@ export async function updateSession(request: NextRequest) {
   const user = await getUserWithClockSkewRetry(supabase)
   const path = request.nextUrl.pathname
 
-  // El enlace de confirmación de correo aterriza aquí sin sesión todavía.
-  if (path.startsWith('/auth/callback')) {
+  // Rutas públicas: el callback de Google (llega sin sesión todavía) y la
+  // política de privacidad (tiene que poder leerse sin login).
+  if (path.startsWith('/auth/callback') || path.startsWith('/privacidad')) {
     return supabaseResponse
   }
 

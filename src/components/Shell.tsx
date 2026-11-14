@@ -69,7 +69,8 @@ const TABS: Tab[] = [
   },
 ]
 
-const AUTH_ROUTES = ['/login', '/activar']
+// Pantallas sin cabecera, pestañas ni botón flotante.
+const BARE_ROUTES = ['/login', '/activar', '/privacidad']
 
 function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`)
@@ -80,9 +81,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const current = TABS.find((t) => isActive(pathname, t.href))
   const fab = current?.fab
 
-  // /login y /activar van sin cabecera, pestañas ni botón flotante.
+  // /login, /activar y /privacidad van sin cabecera, pestañas ni botón flotante.
   // (Este return va después de todos los hooks.)
-  if (AUTH_ROUTES.some((r) => pathname.startsWith(r))) {
+  if (BARE_ROUTES.some((r) => pathname.startsWith(r))) {
     return <>{children}</>
   }
 

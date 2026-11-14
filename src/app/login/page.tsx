@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import AuthCard from '@/components/AuthCard'
 import GoogleButton from './GoogleButton'
 
@@ -16,6 +17,14 @@ export default async function LoginPage({
         Registra tus comidas, macros, peso y cintura.
       </p>
       <GoogleButton errorInicial={error === 'auth'} />
+      <div className="mt-5 text-center">
+        <Link
+          href="/privacidad"
+          className="inline-flex min-h-9 items-center rounded-lg px-1.5 text-xs text-muted hover:text-ink"
+        >
+          Privacidad
+        </Link>
+      </div>
     </AuthCard>
   )
 }

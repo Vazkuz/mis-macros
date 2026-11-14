@@ -36,7 +36,7 @@ El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" 
 
 - **BottomSheet único sobre vaul.** Todo bottom sheet de la app usa `src/components/BottomSheet.tsx`. No se usa vaul directo ni otra librería. Si mañana se cambia de librería, solo se toca ese archivo.
 - **Todos los hooks van antes de cualquier `return null`** (o cualquier return temprano). Un return antes de un hook rompe el orden de hooks de React.
-- **`.env.local` nunca se sube.** Está en `.gitignore`. La plantilla es `.env.local.example` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+- **`.env.local` nunca se sube.** Está en `.gitignore`. La plantilla es `.env.local.example` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`).
 - **El SQL se corre a mano en el SQL Editor de Supabase.** Nada de migraciones automáticas desde la app ni desde Code: el SQL se escribe en el repo y Daniel lo ejecuta en el panel.
 - **Textos de la interfaz en español peruano, con tuteo.** Nunca voseo ("puedes", no "podés"; "elige", no "elegí"). Aplica a labels, placeholders, ayudas, errores, toasts y confirmaciones.
 - Colores siempre con los tokens de `@theme` (`bg-acc`, `text-muted`, `border-line`, `text-prot`, etc.), no hex sueltos.

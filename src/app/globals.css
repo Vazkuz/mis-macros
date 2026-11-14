@@ -25,6 +25,13 @@
   --color-disabled: #B9C7BE;    /* botón deshabilitado, texto sobre fondo oscuro */
   --color-danger: #B42318;
 
+  /* Tarjeta oscura de resultado (Meta): línea divisoria y barras de macros
+     en tonos claros sobre fondo ink. */
+  --color-ink-line: #34413A;
+  --color-prot-l: #7FA3F0;
+  --color-carb-l: #F0B866;
+  --color-fat-l: #C4A0E6;
+
   /* Alias que usa BottomSheet.tsx (copiado tal cual de Mis Gastos). */
   --color-surface: var(--color-card);
   --color-ink-soft: var(--color-muted);

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
 import BottomSheet from '@/components/BottomSheet'
-import { SOURCE_LABEL, round1, type Food } from '@/lib/foods'
+import { basisLabel, round1, type Food } from '@/lib/foods'
 import { useFoods } from '@/lib/useFoods'
 import { useFoodSearch } from '@/lib/useFoodSearch'
 import { MEALS, MEAL_LABEL, equivalence, macrosFor, type Meal } from '@/lib/hoy'
@@ -12,18 +12,11 @@ import { MEALS, MEAL_LABEL, equivalence, macrosFor, type Meal } from '@/lib/hoy'
 const MAX_SHOWN = 20
 const fmt = (n: number) => Math.round(n).toLocaleString('es-PE')
 
-/** "100 g", "100 mL" o "1 u (50 g)". */
-function baseText(f: Food) {
-  if (f.basis === 'unit') {
-    return f.grams_per_unit ? `1 u (${round1(f.grams_per_unit)} ${f.unit_label})` : '1 u'
-  }
-  return `100 ${f.unit_label}`
-}
-
 /**
  * Sheet "Agregar a <comida>". Cambiar de comida solo cambia el título (no
  * cierra ni re-anima). Teclado: ↑↓ + Enter elige, Enter en cantidad agrega,
- * Esc cancela la selección (y, sin selección, cierra el sheet).
+ * Esc cancela la selección (y, sin selección, cierra el sheet). Se cierra
+ * con la X, tocando fuera o arrastrando hacia abajo (no hay botón "Listo").
  */
 export default function AddSheet({
   open,
@@ -123,7 +116,8 @@ export default function AddSheet({
   return (
     <BottomSheet open={open} onClose={close} title={`Agregar a ${MEAL_LABEL[meal]}`}>
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Comida">
+        {/* Siempre en una fila, repartiendo el ancho en partes iguales (cabe en ~360px). */}
+        <div className="flex flex-nowrap gap-1.5" role="group" aria-label="Comida">
           {MEALS.map((m) => {
             const on = m.value === meal
             return (
@@ -132,7 +126,7 @@ export default function AddSheet({
                 type="button"
                 aria-pressed={on}
                 onClick={() => onMealChange(m.value)}
-                className={`min-h-10 cursor-pointer rounded-full border px-3 text-[13px] font-semibold ${
+                className={`h-9 min-w-0 flex-1 cursor-pointer rounded-full border px-1 text-[13px] font-semibold whitespace-nowrap ${
                   on ? 'border-acc bg-acc text-white' : 'border-line-strong bg-card'
                 }`}
               >
@@ -142,13 +136,13 @@ export default function AddSheet({
           })}
         </div>
 
-        <div className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-3 shadow-[0_6px_16px_-12px_rgba(22,32,26,.35)]">
+        <div className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-2.5 shadow-[0_6px_16px_-12px_rgba(22,32,26,.35)]">
           <div className="relative">
             <Search
-              size={18}
+              size={16}
               strokeWidth={2.2}
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted"
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted"
             />
             <input
               ref={searchRef}
@@ -184,7 +178,8 @@ export default function AddSheet({
                   if (showList && shown[hi]) pick(shown[hi])
                 }
               }}
-              className="min-h-12 w-full rounded-xl border-[1.5px] border-acc bg-card pr-3.5 pl-[42px] text-base focus:outline-3 focus:outline-focus"
+              // text-base (16px) a propósito: con menos, iOS hace zoom al enfocar.
+              className="h-10 w-full rounded-[10px] border-[1.5px] border-acc bg-card pr-3 pl-9 text-base focus:outline-3 focus:outline-focus"
             />
           </div>
 
@@ -196,13 +191,13 @@ export default function AddSheet({
               className="m-0 flex max-h-[320px] list-none flex-col overflow-auto rounded-xl border border-line p-1"
             >
               {status === 'loading' ? (
-                <li className="px-3 py-2.5 text-sm text-muted">Cargando alimentos…</li>
+                <li className="px-2.5 py-2 text-sm text-muted">Cargando alimentos…</li>
               ) : status === 'error' ? (
-                <li className="px-3 py-2.5 text-sm text-danger">
+                <li className="px-2.5 py-2 text-sm text-danger">
                   No se pudo cargar la base. Recarga la página.
                 </li>
               ) : shown.length === 0 ? (
-                <li className="px-3 py-2.5 text-sm text-muted">
+                <li className="px-2.5 py-2 text-sm text-muted">
                   No está en la base.
                   {isAdmin && (
                     <>
@@ -232,18 +227,16 @@ export default function AddSheet({
                       pick(f)
                     }}
                     onMouseEnter={() => setHi(i)}
-                    className={`flex cursor-pointer items-center justify-between gap-2.5 rounded-lg px-3 py-2.5 ${
+                    className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1 ${
                       i === hi ? 'bg-acc-soft' : ''
                     }`}
                   >
-                    <div className="min-w-0">
-                      <div className="text-[15px] font-semibold">{f.name}</div>
-                      <div className="text-xs text-muted">
-                        {SOURCE_LABEL[f.source]} · {baseText(f)}
-                      </div>
-                    </div>
-                    <span className="text-[13px] font-semibold whitespace-nowrap">
-                      {fmt(f.kcal)} kcal
+                    <span className="min-w-0 text-sm leading-tight font-semibold">{f.name}</span>
+                    <span className="flex shrink-0 flex-col items-end leading-tight">
+                      <span className="text-[13px] font-semibold whitespace-nowrap">
+                        {fmt(f.kcal)} kcal
+                      </span>
+                      <span className="text-xs whitespace-nowrap text-muted">{basisLabel(f)}</span>
                     </span>
                   </li>
                 ))
@@ -252,7 +245,7 @@ export default function AddSheet({
           )}
 
           <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-            <div className="flex min-h-12 items-center overflow-hidden rounded-xl border border-line-strong bg-card focus-within:outline-3 focus-within:outline-focus">
+            <div className="flex h-10 items-center overflow-hidden rounded-[10px] border border-line-strong bg-card focus-within:outline-3 focus-within:outline-focus">
               <input
                 ref={qtyRef}
                 type="number"
@@ -270,9 +263,10 @@ export default function AddSheet({
                     add()
                   }
                 }}
-                className="min-h-[46px] w-full min-w-0 bg-transparent px-3 text-right text-base outline-none disabled:opacity-60"
+                // 16px a propósito (evita el zoom de iOS al enfocar).
+                className="h-[38px] w-full min-w-0 bg-transparent px-2.5 text-right text-base outline-none disabled:opacity-60"
               />
-              <span className="pr-3 pl-1 text-sm font-semibold whitespace-nowrap text-muted">
+              <span className="pr-2.5 pl-1 text-sm font-semibold whitespace-nowrap text-muted">
                 {unit}
               </span>
             </div>
@@ -280,7 +274,7 @@ export default function AddSheet({
               type="button"
               onClick={add}
               disabled={!selected || !qtyOk}
-              className="min-h-12 cursor-pointer rounded-xl bg-acc px-[18px] text-[15px] font-semibold text-white disabled:cursor-not-allowed disabled:bg-disabled"
+              className="h-10 cursor-pointer rounded-[10px] bg-acc px-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-disabled"
             >
               Agregar
             </button>
@@ -304,14 +298,6 @@ export default function AddSheet({
             <Kbd>Esc</Kbd> cancela.
           </p>
         </div>
-
-        <button
-          type="button"
-          onClick={close}
-          className="min-h-12 w-full cursor-pointer rounded-xl border border-line-strong bg-card px-[18px] text-[15px] font-semibold text-acc"
-        >
-          Listo
-        </button>
       </div>
     </BottomSheet>
   )

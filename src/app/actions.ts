@@ -125,7 +125,7 @@ function validateFood(f: FoodInput): string | null {
   if (!['100g', 'unit'].includes(f.basis)) return 'Elige la medida.'
   if (!['g', 'mL'].includes(f.unitLabel)) return 'Elige la unidad.'
   if (f.basis === 'unit' && !(f.gramsPerUnit != null && f.gramsPerUnit > 0)) {
-    return 'Pon los gramos por unidad.'
+    return 'Pon la cantidad por unidad.'
   }
   for (const [label, v] of [
     ['proteína', f.protein],

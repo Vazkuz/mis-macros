@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { createFood, deleteFood, updateFood, type FoodInput } from '@/app/actions'
 import {
   SOURCE_LABEL,
+  basisLabel,
   kcalOf,
   type Food,
   type FoodBasis,
@@ -143,7 +144,12 @@ function FoodForm({
   const c = num(draft.carbs)
   const g = num(draft.fat)
   const kcal = kcalOf(p, c, g)
-  const per = draft.basis === 'unit' ? 'por unidad' : `por 100 ${draft.unitLabel}`
+  // Misma etiqueta que en la lista: "por unidad (200 mL)", "por 100 g"…
+  const per = basisLabel({
+    basis: draft.basis,
+    unit_label: draft.unitLabel,
+    grams_per_unit: draft.basis === 'unit' ? num(draft.gramsPerUnit) || null : null,
+  })
 
   function finish(message: string) {
     router.refresh()
@@ -157,7 +163,7 @@ function FoodForm({
     if (!name) return setError('Ponle un nombre al alimento.')
     const gramsPerUnit = draft.basis === 'unit' ? num(draft.gramsPerUnit) : null
     if (draft.basis === 'unit' && !(gramsPerUnit && gramsPerUnit > 0)) {
-      return setError('Pon los gramos por unidad.')
+      return setError('Pon la cantidad por unidad.')
     }
     const input: FoodInput = {
       name,
@@ -246,7 +252,7 @@ function FoodForm({
       {draft.basis === 'unit' && (
         <div className="flex flex-col gap-1.5">
           <label htmlFor="fGr" className={labelClass}>
-            Gramos por unidad
+            {draft.unitLabel === 'mL' ? 'mL por unidad' : 'Gramos por unidad'}
           </label>
           <input
             id="fGr"
@@ -254,7 +260,7 @@ function FoodForm({
             inputMode="decimal"
             step="any"
             min={0}
-            placeholder="50"
+            placeholder={draft.unitLabel === 'mL' ? '200' : '50'}
             value={draft.gramsPerUnit}
             onChange={(e) => set('gramsPerUnit', e.target.value)}
             className={inputClass}

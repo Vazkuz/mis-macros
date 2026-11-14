@@ -73,10 +73,12 @@ function toFood(r: Record<string, unknown>): Food {
 /** kcal a partir de los macros (misma fórmula que la columna generada). */
 export const kcalOf = (p: number, c: number, g: number) => 4 * p + 4 * c + 9 * g
 
-/** "por 100 g", "por 100 mL" o "por unidad (N g)". */
+/** "por 100 g", "por 100 mL", "por unidad (50 g)" o "por unidad (200 mL)". */
 export function basisLabel(f: Pick<Food, 'basis' | 'unit_label' | 'grams_per_unit'>): string {
   if (f.basis === 'unit') {
-    return f.grams_per_unit ? `por unidad (${round1(f.grams_per_unit)} g)` : 'por unidad'
+    return f.grams_per_unit
+      ? `por unidad (${round1(f.grams_per_unit)} ${f.unit_label})`
+      : 'por unidad'
   }
   return `por 100 ${f.unit_label}`
 }

@@ -267,10 +267,12 @@ export default function HoyView({
             </div>
           </section>
 
+          {/* Móvil: 4 columnas iguales que siempre entran en una fila (~360px).
+              Desde 900px: lista vertical con nombre a la izquierda y kcal a la derecha. */}
           <div
             role="group"
             aria-label="Comida"
-            className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] min-[900px]:mx-0 min-[900px]:flex-col min-[900px]:overflow-visible min-[900px]:px-0 [&::-webkit-scrollbar]:hidden"
+            className="grid grid-cols-4 gap-1.5 min-[900px]:flex min-[900px]:flex-col min-[900px]:gap-2"
           >
             {MEALS.map((m) => {
               const on = m.value === meal
@@ -280,12 +282,14 @@ export default function HoyView({
                   type="button"
                   aria-pressed={on}
                   onClick={() => setMeal(m.value)}
-                  className={`flex min-h-11 shrink-0 cursor-pointer flex-col justify-center rounded-xl border px-3.5 py-1.5 text-left leading-tight min-[900px]:w-full min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between ${
+                  className={`flex h-12 min-w-0 cursor-pointer flex-col items-center justify-center rounded-xl border px-1 leading-tight min-[900px]:h-auto min-[900px]:min-h-11 min-[900px]:w-full min-[900px]:flex-row min-[900px]:justify-between min-[900px]:px-3.5 min-[900px]:py-1.5 ${
                     on ? 'border-acc bg-acc text-white' : 'border-line bg-card'
                   }`}
                 >
-                  <b className="text-sm">{m.label}</b>
-                  <small className={`text-xs ${on ? 'text-acc-soft' : 'text-muted'}`}>
+                  <b className="text-[13px] whitespace-nowrap min-[900px]:text-sm">{m.label}</b>
+                  <small
+                    className={`text-[11px] whitespace-nowrap min-[900px]:text-xs ${on ? 'text-acc-soft' : 'text-muted'}`}
+                  >
                     {fmt(totals.perMeal[m.value])} kcal
                   </small>
                 </button>

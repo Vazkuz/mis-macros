@@ -38,6 +38,7 @@
   --color-prot-l: #7FA3F0;
   --color-carb-l: #F0B866;
   --color-fat-l: #C4A0E6;
+  --color-mint: #7DDBAE;        /* avance de cintura y C/A saludable (Peso y cintura) */
 
   /* Alias que usa BottomSheet.tsx (copiado tal cual de Mis Gastos). */
   --color-surface: var(--color-card);

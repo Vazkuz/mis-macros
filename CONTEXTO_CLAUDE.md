@@ -29,6 +29,8 @@ El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" 
 
 `/agregar` reemplaza al sheet de agregar: columna con la altura visible (Android: `interactiveWidget: 'resizes-content'` en el viewport raíz; iOS: sigue a `visualViewport`), cabecera fija y solo la lista se desplaza. La lógica optimista de registros vive en `src/lib/useFoodLogs.ts` (la usan Hoy y /agregar).
 
+`/progreso` (Peso y cintura): `page.tsx` carga `profiles.height_cm` y todas las `measurements` (una fila por día, `unique(user_id, measured_on)`, con peso y/o cintura) y las pasa a `ProgresoView.tsx`. Arriba/izquierda: tarjeta oscura de cintura (meta = talla × 0.5 redondeada a 0.5 cm, avance desde la primera cintura, cintura/altura en ámbar ≥ 0.50 y menta < 0.50) y tarjetas Peso (IMC y delta) y Última medición. Derecha: gráfico SVG hecho a mano (`TrendChart.tsx`, eje X proporcional a la fecha, línea de meta solo en Cintura) e Historial (tocar una fila edita). `MeasurementSheet.tsx`: nueva (completa la fila del día sin borrar lo que ya había) o editar (valores tal cual; "Ya hay una medición ese día" si la fecha choca) + Eliminar con `ConfirmDialog`. Guardar y eliminar son optimistas; las actions (`saveMeasurement`, `updateMeasurement`, `deleteMeasurement`) hacen `revalidatePath` de `/meta` y `/` porque ambas calculan la meta con **el último peso que tenga `weight_kg`** (`loadProfileAndWeight` en `src/lib/profile.ts`). Helpers puros en `src/lib/progreso.ts`.
+
 ## Archivos clave
 
 - `src/components/BottomSheet.tsx` — copiado tal cual de Mis Gastos.

@@ -15,6 +15,17 @@ import {
   type FoodLog,
   type Meal,
 } from '@/lib/hoy'
+import {
+  ERR_CINTURA,
+  ERR_FECHA_OCUPADA,
+  ERR_NINGUNO,
+  ERR_PESO,
+  MEASUREMENT_SELECT,
+  toMeasurement,
+  validWaist,
+  validWeight,
+  type Measurement,
+} from '@/lib/progreso'
 
 export async function signOut() {
   const supabase = await createClient()
@@ -322,5 +333,123 @@ export async function deleteFoodLog(id: string): Promise<{ error: string } | { o
     console.error('deleteFoodLog falló:', error ?? '0 filas eliminadas')
     return { error: 'No se pudo quitar.' }
   }
+  return { ok: true }
+}
+
+// ---------- Peso y cintura (measurements) ----------
+// Una fila por día (unique user_id + measured_on), con al menos peso o
+// cintura. Cada acción devuelve la fila guardada para reemplazar la optimista.
+// revalidatePath de Meta y Hoy: las dos calculan la meta con el último peso.
+
+type MeasurementInput = { date: string; weightKg: number | null; waistCm: number | null }
+type MeasurementResult = { error: string } | { ok: true; measurement: Measurement }
+
+function validateMeasurement({ date, weightKg, waistCm }: MeasurementInput): string | null {
+  if (!isIsoDate(date) || date > todayLima()) return 'Elige una fecha que no sea futura.'
+  if (weightKg == null && waistCm == null) return ERR_NINGUNO
+  if (weightKg != null && !validWeight(weightKg)) return ERR_PESO
+  if (waistCm != null && !validWaist(waistCm)) return ERR_CINTURA
+  return null
+}
+
+const round2 = (n: number | null) => (n == null ? null : Math.round(n * 100) / 100)
+
+function revalidateMeasurements() {
+  revalidatePath('/meta')
+  revalidatePath('/')
+}
+
+/** Nueva medición: si ya hay una ese día, se completa (un campo vacío no borra). */
+export async function saveMeasurement(input: MeasurementInput): Promise<MeasurementResult> {
+  const invalid = validateMeasurement(input)
+  if (invalid) return { error: invalid }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Tu sesión expiró. Vuelve a ingresar.' }
+
+  const { data: existing, error: findError } = await supabase
+    .from('measurements')
+    .select('weight_kg, waist_cm')
+    .eq('user_id', user.id)
+    .eq('measured_on', input.date)
+    .maybeSingle()
+  if (findError) {
+    console.error('saveMeasurement: búsqueda falló:', findError)
+    return { error: 'No se pudo guardar la medición.' }
+  }
+
+  const { data, error } = await supabase
+    .from('measurements')
+    .upsert(
+      {
+        user_id: user.id,
+        measured_on: input.date,
+        weight_kg: round2(input.weightKg) ?? existing?.weight_kg ?? null,
+        waist_cm: round2(input.waistCm) ?? existing?.waist_cm ?? null,
+      },
+      { onConflict: 'user_id,measured_on' }
+    )
+    .select(MEASUREMENT_SELECT)
+    .single()
+  if (error || !data) {
+    console.error('saveMeasurement falló:', error)
+    return { error: 'No se pudo guardar la medición.' }
+  }
+  revalidateMeasurements()
+  return { ok: true, measurement: toMeasurement(data as unknown as Record<string, unknown>) }
+}
+
+/** Editar: los valores quedan tal cual (se puede vaciar uno, no los dos). */
+export async function updateMeasurement(
+  id: string,
+  input: MeasurementInput
+): Promise<MeasurementResult> {
+  const invalid = validateMeasurement(input)
+  if (invalid) return { error: invalid }
+
+  const supabase = await createClient()
+  const { data: clash, error: clashError } = await supabase
+    .from('measurements')
+    .select('id')
+    .eq('measured_on', input.date)
+    .neq('id', id)
+    .limit(1)
+    .maybeSingle()
+  if (clashError) {
+    console.error('updateMeasurement: búsqueda falló:', clashError)
+    return { error: 'No se pudo guardar la medición.' }
+  }
+  if (clash) return { error: ERR_FECHA_OCUPADA }
+
+  const { data, error } = await supabase
+    .from('measurements')
+    .update({
+      measured_on: input.date,
+      weight_kg: round2(input.weightKg),
+      waist_cm: round2(input.waistCm),
+    })
+    .eq('id', id)
+    .select(MEASUREMENT_SELECT)
+    .single()
+  if (error || !data) {
+    console.error('updateMeasurement falló:', error)
+    // 23505: unique (user_id, measured_on), por si otra pestaña ganó la carrera.
+    return { error: error?.code === '23505' ? ERR_FECHA_OCUPADA : 'No se pudo guardar la medición.' }
+  }
+  revalidateMeasurements()
+  return { ok: true, measurement: toMeasurement(data as unknown as Record<string, unknown>) }
+}
+
+export async function deleteMeasurement(id: string): Promise<{ error: string } | { ok: true }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('measurements').delete().eq('id', id).select('id')
+  if (error || !data?.length) {
+    console.error('deleteMeasurement falló:', error ?? '0 filas eliminadas')
+    return { error: 'No se pudo eliminar la medición.' }
+  }
+  revalidateMeasurements()
   return { ok: true }
 }

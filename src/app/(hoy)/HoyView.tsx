@@ -4,15 +4,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, Pencil, Trash2 } from 'lucide-react'
+import { Check, Pencil, Trash2, Utensils } from 'lucide-react'
 import Toast, { useToast } from '@/components/Toast'
 import FavoriteStar from '@/components/FavoriteStar'
 import { useFabAction } from '@/lib/fab'
-import { round1 } from '@/lib/foods'
+import { quantityLabel, round1 } from '@/lib/foods'
 import type { Goals } from '@/lib/metas'
-import { MEALS, MEAL_LABEL, qtyUnit, type FoodLog, type Meal } from '@/lib/hoy'
+import {
+  MEALS,
+  MEAL_LABEL,
+  isDishLog,
+  logAmount,
+  qtyUnit,
+  type FoodLog,
+  type Meal,
+} from '@/lib/hoy'
 import { isTempLog, useFoodLogs } from '@/lib/useFoodLogs'
 import { useFavorites } from '@/lib/useFavorites'
+import { useDishes } from '@/lib/useDishes'
 
 const fmt = (n: number) => Math.round(n).toLocaleString('es-PE')
 
@@ -23,6 +32,7 @@ export default function HoyView({
   loadError,
   goals,
   defaultMeal,
+  initialOpenId = null,
 }: {
   date: string
   isToday: boolean
@@ -30,14 +40,17 @@ export default function HoyView({
   loadError: boolean
   goals: Goals | null
   defaultMeal: Meal
+  /** ?open= al volver de /comida: esa fila arranca desplegada. */
+  initialOpenId?: string | null
 }) {
   const router = useRouter()
   const [meal, setMeal] = useState<Meal>(defaultMeal)
   const toast = useToast()
   const { logs, toggle, changeQty, remove } = useFoodLogs(initialLogs, date, toast.show)
   const { isFavorite, toggleFavorite } = useFavorites(toast.show)
+  const { dishById, toggleDishFavorite } = useDishes(toast.show)
   // Fila desplegada (macros): solo una a la vez.
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(initialOpenId)
 
   // El botón flotante abre /agregar con la comida y la fecha actuales.
   const agregarHref = `/agregar?meal=${meal}&d=${date}`
@@ -217,21 +230,35 @@ export default function HoyView({
             </div>
           ) : mealLogs.length > 0 ? (
             <ul className="flex flex-col">
-              {mealLogs.map((log) => (
-                <LogRow
-                  key={log.id}
-                  log={log}
-                  open={openId === log.id}
-                  onOpen={() => setOpenId((id) => (id === log.id ? null : log.id))}
-                  favorite={isFavorite(log.food_id)}
-                  onFavorite={
-                    log.food_id ? () => toggleFavorite(log.food_id!, log.food_name) : null
-                  }
-                  onToggle={() => toggle(log)}
-                  onQty={(q) => changeQty(log, q)}
-                  onDelete={() => removeWithToast(log)}
-                />
-              ))}
+              {mealLogs.map((log) => {
+                // Plato: la estrella es dishes.favorite (sin estrella si el
+                // plato se borró). Alimento: el destacado personal.
+                const dish = log.dish_id ? dishById.get(log.dish_id) : undefined
+                const fav = isDishLog(log)
+                  ? {
+                      on: dish?.favorite ?? false,
+                      toggle: dish ? () => toggleDishFavorite(dish.id) : null,
+                    }
+                  : {
+                      on: isFavorite(log.food_id),
+                      toggle: log.food_id
+                        ? () => toggleFavorite(log.food_id!, log.food_name)
+                        : null,
+                    }
+                return (
+                  <LogRow
+                    key={log.id}
+                    log={log}
+                    open={openId === log.id}
+                    onOpen={() => setOpenId((id) => (id === log.id ? null : log.id))}
+                    favorite={fav.on}
+                    onFavorite={fav.toggle}
+                    onToggle={() => toggle(log)}
+                    onQty={(q) => changeQty(log, q)}
+                    onDelete={() => removeWithToast(log)}
+                  />
+                )
+              })}
             </ul>
           ) : (
             <div className="rounded-xl border border-dashed border-line-strong p-[18px] text-center text-sm text-muted">
@@ -251,13 +278,6 @@ export default function HoyView({
       <Toast text={toast.text} action={toast.action} />
     </>
   )
-}
-
-/** "150 g", "1 unidad" o "2 unidades". */
-function qtyLabel(log: FoodLog, quantity: number): string {
-  const q = round1(quantity).toLocaleString('es-PE')
-  if (log.basis === 'unit') return `${q} ${quantity === 1 ? 'unidad' : 'unidades'}`
-  return `${q} ${log.unit_label}`
 }
 
 const MACRO_PILLS = [
@@ -289,7 +309,10 @@ function LogRow({
   onQty: (q: number) => void
   onDelete: () => void
 }) {
+  const router = useRouter()
   const pending = isTempLog(log.id)
+  const dish = isDishLog(log)
+  const comidaHref = `/comida/${log.id}`
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const rowRef = useRef<HTMLLIElement>(null)
@@ -370,6 +393,14 @@ function LogRow({
           <div
             className={`text-[15px] leading-tight font-semibold break-words ${log.eaten ? '' : 'text-muted'}`}
           >
+            {dish && (
+              <Utensils
+                size={13}
+                strokeWidth={2.5}
+                aria-label="Plato"
+                className="mr-1 inline-block align-[-1px] text-acc"
+              />
+            )}
             {log.food_name}
           </div>
           {editing ? (
@@ -403,7 +434,7 @@ function LogRow({
             </div>
           ) : (
             <div className="mt-0.5 text-xs text-muted">
-              {qtyLabel(log, log.quantity)} · {fmt(kcal)} kcal
+              {logAmount(log)} · {fmt(kcal)} kcal
             </div>
           )}
         </div>
@@ -430,10 +461,16 @@ function LogRow({
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                startEdit()
+                // Plato: sus ingredientes se editan en /comida/[logId].
+                if (dish) router.push(comidaHref)
+                else startEdit()
               }}
               disabled={pending}
-              aria-label={`Cambiar cantidad de ${log.food_name}`}
+              aria-label={
+                dish
+                  ? `Editar ingredientes de ${log.food_name}`
+                  : `Cambiar cantidad de ${log.food_name}`
+              }
               className={`${iconBtn} hover:bg-bg hover:text-muted`}
             >
               <Pencil size={17} aria-hidden="true" />
@@ -479,6 +516,30 @@ function LogRow({
               </div>
             ))}
           </div>
+          {dish && (
+            <div className="flex flex-col gap-2 pb-3 pl-12">
+              {log.items.length > 0 && (
+                <ul className="flex flex-col gap-0.5 text-xs text-muted">
+                  {log.items.map((it) => (
+                    <li key={it.id} className="flex justify-between gap-3">
+                      <span className="min-w-0">{it.food_name}</span>
+                      <span className="shrink-0 whitespace-nowrap">
+                        {quantityLabel(it.basis, it.unit_label, it.quantity)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!pending && (
+                <Link
+                  href={comidaHref}
+                  className="inline-flex min-h-10 w-full items-center justify-center rounded-xl border-[1.5px] border-acc bg-card text-sm font-semibold text-acc hover:bg-acc-soft"
+                >
+                  Editar ingredientes
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </li>

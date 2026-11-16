@@ -8,9 +8,9 @@ import HoyView from './HoyView'
 export default async function Hoy({
   searchParams,
 }: {
-  searchParams: Promise<{ d?: string; meal?: string }>
+  searchParams: Promise<{ d?: string; meal?: string; open?: string }>
 }) {
-  const { d, meal } = await searchParams
+  const { d, meal, open } = await searchParams
   const today = todayLima()
   // ?d=YYYY-MM-DD; nunca un día futuro.
   const date = isIsoDate(d) && d <= today ? d : today
@@ -38,6 +38,8 @@ export default async function Hoy({
       goals={goals}
       // ?meal= al volver de /agregar; si no, según la hora de Lima.
       defaultMeal={isMeal(meal) ? meal : mealForHour(hourLima())}
+      // ?open= al volver de /comida: esa fila arranca desplegada.
+      initialOpenId={open && /^\d+$/.test(open) ? open : null}
     />
   )
 }

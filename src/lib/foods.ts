@@ -84,6 +84,13 @@ export function basisLabel(f: Pick<Food, 'basis' | 'unit_label' | 'grams_per_uni
 
 export const round1 = (x: number) => Math.round(x * 10) / 10
 
+/** "150 g", "200 mL", "1 unidad" o "2 unidades" (siempre en la unidad del sistema). */
+export function quantityLabel(basis: FoodBasis, unit: FoodUnit, quantity: number): string {
+  const q = round1(quantity).toLocaleString('es-PE')
+  if (basis === 'unit') return `${q} ${quantity === 1 ? 'unidad' : 'unidades'}`
+  return `${q} ${unit}`
+}
+
 /** Minúsculas y sin tildes, para comparar "Camote" con "camóte". */
 export function normalize(s: string): string {
   return s
@@ -93,12 +100,16 @@ export function normalize(s: string): string {
     .trim()
 }
 
-/** 'destacados' = los destacados personales del usuario (useFavorites). */
-export type FoodFilter = 'todos' | 'destacados' | FoodSource
+/**
+ * 'destacados' = destacados personales (alimentos y platos);
+ * 'platos' = solo los platos propios del usuario (useDishes).
+ */
+export type FoodFilter = 'todos' | 'destacados' | 'platos' | FoodSource
 
 export const FOOD_FILTERS: { value: FoodFilter; label: string }[] = [
   { value: 'todos', label: 'Todos' },
   { value: 'destacados', label: 'Destacados' },
+  { value: 'platos', label: 'Tus platos' },
   { value: 'ins', label: 'INS' },
   { value: 'plato', label: 'Platos' },
   { value: 'producto', label: 'Productos' },

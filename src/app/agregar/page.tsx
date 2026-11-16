@@ -8,13 +8,14 @@ import AgregarView from './AgregarView'
 
 export const metadata: Metadata = { title: 'Agregar comida · Mis Macros' }
 
-// /agregar?meal=desayuno&d=2026-11-14 — pantalla completa (sin Shell).
+// /agregar?meal=desayuno&d=2026-11-14[&sel=dish:<id>] — pantalla completa (sin Shell).
+// sel: al volver de crear un plato, ese plato aparece ya elegido.
 export default async function AgregarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ d?: string; meal?: string }>
+  searchParams: Promise<{ d?: string; meal?: string; sel?: string }>
 }) {
-  const { d, meal } = await searchParams
+  const { d, meal, sel } = await searchParams
   const today = todayLima()
   const date = isIsoDate(d) && d <= today ? d : today
   const initialMeal = isMeal(meal) ? meal : mealForHour(hourLima())
@@ -29,6 +30,7 @@ export default async function AgregarPage({
       isToday={date === today}
       initialMeal={initialMeal}
       initialLogs={logs ?? []}
+      initialDishId={sel?.match(/^dish:(\d+)$/)?.[1] ?? null}
       isAdmin={admin}
     />
   )

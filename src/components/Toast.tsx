@@ -5,13 +5,33 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 /** Botón opcional del aviso (p. ej. "Deshacer"). */
 export type ToastAction = { label: string; onClick: () => void }
 
+// Aviso para la PRÓXIMA pantalla: se deja antes de navegar (p. ej. "Plato
+// actualizado" al volver del editor) y lo muestra el primer useToast que se
+// monte después.
+let flash: string | null = null
+
+/** Deja un aviso para mostrarlo en la pantalla a la que se va a navegar. */
+export function flashToast(text: string) {
+  flash = text
+}
+
 /**
  * Aviso breve (mockup: .toast). `show(texto)` lo muestra 1.6 s; con
  * `show(texto, acción)` dura 4 s para que dé tiempo de tocar el botón.
  */
 export function useToast() {
-  const [state, setState] = useState<{ text: string; action?: ToastAction } | null>(null)
+  const [state, setState] = useState<{ text: string; action?: ToastAction } | null>(() =>
+    flash ? { text: flash } : null
+  )
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fromFlash = useRef(state?.text ?? null)
+
+  // Aviso heredado de la pantalla anterior: se consume y se oculta solo.
+  useEffect(() => {
+    if (!fromFlash.current) return
+    if (flash === fromFlash.current) flash = null
+    timer.current = setTimeout(() => setState(null), 2400)
+  }, [])
 
   useEffect(
     () => () => {

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { ACTIVITIES, PACES, todayLima, type Activity, type Pace, type Sex } from '@/lib/metas'
 import { createClient } from '@/utils/supabase/server'
+import { loadLogById } from '@/lib/loadLogs'
 import { isAdmin } from '@/lib/auth'
 import type { FoodBasis, FoodSource, FoodUnit } from '@/lib/foods'
 import {
@@ -331,6 +332,70 @@ export async function deleteFoodLog(id: string): Promise<{ error: string } | { o
     console.error('deleteFoodLog falló:', error ?? '0 filas eliminadas')
     return { error: 'No se pudo quitar.' }
   }
+  return { ok: true }
+}
+
+// ---------- Platos en una comida (RPCs add_dish_to_log y set_log_items) ----------
+// Los triggers copian los macros de cada ingrediente (food_log_items) y
+// recalculan los del registro padre como la suma: aquí no se calcula nada.
+
+export async function addDishLog(input: {
+  date: string
+  meal: Meal
+  dishId: string
+  portions: number
+}): Promise<LogResult> {
+  const { date, meal, dishId, portions } = input
+  if (!isIsoDate(date) || date > todayLima()) return { error: 'Fecha inválida.' }
+  if (!isMeal(meal)) return { error: 'Elige una comida.' }
+  if (!dishId) return { error: 'Elige un plato.' }
+  if (!Number.isFinite(portions) || portions <= 0 || portions > 1000) {
+    return { error: 'Revisa las porciones.' }
+  }
+
+  const supabase = await createClient()
+  const { data: logId, error } = await supabase.rpc('add_dish_to_log', {
+    p_dish_id: Number(dishId),
+    p_log_date: date,
+    p_meal: meal,
+    p_portions: portions,
+    // Igual que un alimento agregado desde /agregar: entra como comido.
+    p_eaten: true,
+  })
+  if (error || logId == null) {
+    console.error('add_dish_to_log falló:', error)
+    return { error: 'No se pudo agregar el plato. Inténtalo de nuevo.' }
+  }
+  revalidatePath('/')
+  const log = await loadLogById(supabase, String(logId))
+  if (!log) return { error: 'Se agregó el plato, pero no se pudo leer. Recarga la página.' }
+  const { log_date: _date, ...plain } = log
+  void _date
+  return { ok: true, log: plain }
+}
+
+export type LogItemInput = { foodId: string; quantity: number }
+
+/** Reemplaza los ingredientes de un registro de plato (solo esa comida). */
+export async function setLogItems(
+  logId: string,
+  items: LogItemInput[]
+): Promise<{ error: string } | { ok: true }> {
+  if (!logId) return { error: 'Registro inválido.' }
+  if (!items.length) return { error: 'Agrega al menos un ingrediente.' }
+  if (items.some((i) => !i.foodId || !Number.isFinite(i.quantity) || i.quantity <= 0)) {
+    return { error: 'Todas las cantidades deben ser mayores a 0.' }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('set_log_items', {
+    p_log_id: Number(logId),
+    p_items: items.map((i) => ({ food_id: Number(i.foodId), quantity: i.quantity })),
+  })
+  if (error) {
+    console.error('set_log_items falló:', error)
+    return { error: 'No se pudieron guardar los ingredientes. Inténtalo de nuevo.' }
+  }
+  revalidatePath('/')
   return { ok: true }
 }
 

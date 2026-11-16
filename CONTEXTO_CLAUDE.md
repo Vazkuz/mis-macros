@@ -23,9 +23,11 @@ Mismo stack que Mis Gastos (`C:\Users\canad\mis-gastos`):
 | `/progreso` | Peso y cintura | + Ruler ("Nueva medición") |
 | `/alimentos` | Alimentos | + Apple ("Nuevo alimento") |
 | `/meta` | Meta | sin botón |
-| `/agregar?meal=…&d=…` | (pantalla completa, sin Shell) | — |
+| `/agregar?meal=…&d=…[&sel=dish:<id>]` | (pantalla completa, sin Shell) | — |
+| `/platos/nuevo?meal=…&d=…` y `/platos/[id]` | (pantalla completa, sin Shell) | — |
+| `/comida/[logId]` | (pantalla completa, sin Shell) | — |
 
-El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" (lleva a Hoy), barra de pestañas inferior en móvil que pasa a riel lateral desde 900px, y botón flotante contextual. `/login`, `/activar`, `/privacidad` y `/agregar` se pintan sin Shell.
+El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" (lleva a Hoy), barra de pestañas inferior en móvil que pasa a riel lateral desde 900px, y botón flotante contextual. `/login`, `/activar`, `/privacidad`, `/agregar`, `/platos` y `/comida` se pintan sin Shell (`BARE_ROUTES`).
 
 `/agregar` reemplaza al sheet de agregar: columna con la altura visible (Android: `interactiveWidget: 'resizes-content'` en el viewport raíz; iOS: sigue a `visualViewport`), cabecera fija y solo la lista se desplaza. La lógica optimista de registros vive en `src/lib/useFoodLogs.ts` (la usan Hoy y /agregar).
 
@@ -34,6 +36,31 @@ El layout vive en `src/components/Shell.tsx`: cabecera con el logo "Mis Macros" 
 En `/agregar`, a la derecha del buscador va el filtro ★ "Destacados" (recordado en localStorage, apagado por defecto): encendido lista TODOS los destacados aunque el buscador esté vacío, con "Tus destacados · N" encima. Cada resultado y cada fila de `/alimentos` tienen su estrella; el chip "Destacados" de `/alimentos` usa los destacados personales.
 
 **Filas de Hoy** (`LogRow` en `HoyView.tsx`): círculo comido/planificado | nombre y debajo "150 g · 195 kcal" ("1 unidad" / "2 unidades" si `basis='unit'`) | Pencil, Star y Trash2 grises en un bloque de ancho fijo (108px; si `food_id` es null, la estrella deja su hueco). Tocar la fila despliega 3 pastillas Proteína/Carbos/Grasa (gramos enteros, `bg-prot-bg`/`bg-carb-bg`/`bg-fat-bg`), una fila abierta a la vez. El lápiz vuelve la cantidad un input de 16px con ✓ verde (Enter/✓ guarda con `changeQty`; Escape o tocar fuera cancela; las kcal se recalculan en vivo).
+
+## Platos propios
+
+**Tablas** (solo las ve su dueño):
+- `dishes(id, user_id default auth.uid(), name, favorite bool default true, created_at, updated_at)`. `favorite` es la estrella del plato (no usa `user_favorite_foods`).
+- `dish_items(id, dish_id → dishes cascade, food_id → foods cascade, quantity > 0, position)`: ingredientes de 1 porción, en la unidad del sistema (g, mL o unidades).
+- `food_logs.dish_id → dishes on delete set null`. Un registro de plato tiene `food_id` null, `dish_id` = el plato, `food_name` = nombre del plato y `quantity` = porciones.
+- `food_log_items(id, log_id → food_logs cascade, food_id, food_name, quantity, position, protein, carbs, fat)`: copia de los ingredientes de ESE registro. Un trigger copia los macros de cada ingrediente y otro recalcula protein/carbs/fat del `food_log` padre como la suma. **El cliente nunca guarda esos totales** (solo los calcula para mostrar).
+
+**RPCs** (`supabase.rpc`):
+- `save_dish(p_id|null, p_name, p_items [{food_id, quantity}])` → id. Crea o reemplaza nombre e ingredientes.
+- `add_dish_to_log(p_dish_id, p_log_date, p_meal, p_portions, p_eaten)` → id del log (copia ingredientes × porciones). Se llama con `p_eaten: true`, igual que un alimento agregado.
+- `set_log_items(p_log_id, p_items)`: reemplaza los ingredientes de ese registro.
+- Borrar un plato = `delete` en `dishes`; los registros ya hechos no cambian.
+
+**Código:**
+- `src/lib/dishes.ts`: tipos `Dish`/`DishItem` (macros del alimento POR BASE para calcular en vivo), `DISH_SELECT`/`toDish`, `itemsTotals` (kcal = 4P+4C+9G), `itemsLine`, `portionsLabel`, `defaultQty` (1 unidad, 100 mL o 5 g).
+- `src/lib/useDishes.ts`: caché compartida como `useFavorites` → `dishes`, `dishById`, `toggleDishFavorite` (optimista, toast con "Deshacer"), `deleteDish` (optimista) y `saveDish` (RPC; actualiza la caché al terminar).
+- `src/lib/useCatalogSearch.ts`: busca alimentos y platos juntos. Orden: platos destacados, alimentos destacados, platos y alimentos (alfabético en cada grupo), con la misma regla de orden estable (foto de destacados). La usan `/agregar` y `/alimentos`; `useFoodSearch` queda para buscar solo alimentos (editor de ingredientes).
+- `src/lib/loadLogs.ts`: `loadLogs` y `loadLogById` traen además los `food_log_items` (por position) con `basis`/`unit_label` de cada alimento (`attachItems`). `FoodLog` tiene `dish_id` e `items`; `isDishLog(l)` = `dish_id` no null o con ingredientes; `logAmount(l)` da "150 g", "1 unidad", "Plato" o "1.5 porciones".
+- Actions: `addDishLog` (RPC + devuelve la fila con ingredientes) y `setLogItems` (RPC + `revalidatePath('/')`).
+- `src/components/DishEditor.tsx`: editor a pantalla completa (mismo patrón que /agregar, con `useVisibleViewportStyle` de `src/lib/useVisualViewport.ts`). Lo usan `src/app/platos/PlatoEditor.tsx` (nuevo/editar, con nombre) y `src/app/comida/[logId]/ComidaEditor.tsx` (sin nombre, "Total en esta comida" y la casilla "Guardar también en el plato", que hace `save_dish` con ingredientes ÷ porciones).
+- `flashToast(texto)` (en `Toast.tsx`): deja un aviso que muestra la pantalla a la que se navega (p. ej. "Plato actualizado").
+
+**Pantallas:** en `/agregar`, botón Utensils "Platos" junto a ★ (localStorage; con ★ = platos destacados), fila "+ Crear plato propio" siempre arriba de la lista, filas de plato con estrella y tacho (`ConfirmDialog`) y tarjeta de selección con porciones; `?sel=dish:<id>` deja el plato ya elegido. En Hoy, una fila de plato lleva Utensils, "Plato · kcal" o "1.5 porciones · kcal"; el panel suma la lista de ingredientes y "Editar ingredientes"; el lápiz y ese botón van a `/comida/[logId]`, que al guardar vuelve a Hoy con `?open=<logId>` (fila desplegada). En `/alimentos`, chip "Tus platos" y filas de plato (todos los usuarios) que abren `/platos/[id]`.
 
 `/progreso` (Peso y cintura): `page.tsx` carga `profiles.height_cm` y todas las `measurements` (una fila por día, `unique(user_id, measured_on)`, con peso y/o cintura) y las pasa a `ProgresoView.tsx`. Arriba/izquierda: tarjeta oscura de cintura (meta = talla × 0.5 redondeada a 0.5 cm, avance desde la primera cintura, cintura/altura en ámbar ≥ 0.50 y menta < 0.50) y tarjetas Peso (IMC y delta) y Última medición. Derecha: gráfico SVG hecho a mano (`TrendChart.tsx`, eje X proporcional a la fecha, línea de meta solo en Cintura) e Historial (tocar una fila edita). `MeasurementSheet.tsx`: nueva (completa la fila del día sin borrar lo que ya había) o editar (valores tal cual; "Ya hay una medición ese día" si la fecha choca) + Eliminar con `ConfirmDialog`. Guardar y eliminar son optimistas; las actions (`saveMeasurement`, `updateMeasurement`, `deleteMeasurement`) hacen `revalidatePath` de `/meta` y `/` porque ambas calculan la meta con **el último peso que tenga `weight_kg`** (`loadProfileAndWeight` en `src/lib/profile.ts`). Helpers puros en `src/lib/progreso.ts`.
 

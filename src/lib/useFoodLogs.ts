@@ -2,18 +2,22 @@
 
 import { useRef, useState } from 'react'
 import {
+  addDishLog,
   addFoodLog,
   deleteFoodLog,
   setFoodLogEaten,
   updateFoodLogQuantity,
 } from '@/app/actions'
 import type { Food } from '@/lib/foods'
+import { basisFactor, itemsTotals, type Dish } from '@/lib/dishes'
 import { macrosFor, type FoodLog, type Meal } from '@/lib/hoy'
 
 // Registros del día (food_logs) con actualizaciones optimistas: el cambio se
 // ve al instante, la server action devuelve la fila guardada (con los macros
 // que calcula el trigger) y la reemplaza. Si falla, se revierte y se avisa
-// con onError. Lo usan Hoy (marcar, cantidad, quitar) y /agregar (agregar).
+// con onError. Lo usan Hoy (marcar, cantidad, quitar) y /agregar (agregar
+// alimentos y platos). Las acciones de marcar/cantidad no devuelven los
+// ingredientes: se conservan los que ya tenía la fila.
 
 export const isTempLog = (id: string) => id.startsWith('tmp-')
 
@@ -39,6 +43,8 @@ export function useFoodLogs(
   const tempSeq = useRef(0)
 
   const put = (log: FoodLog) => setLogs((ls) => ls.map((l) => (l.id === log.id ? log : l)))
+  const withItems = (server: FoodLog, local: FoodLog) =>
+    server.items.length ? server : { ...server, items: local.items }
 
   function toggle(log: FoodLog) {
     const next = { ...log, eaten: !log.eaten }
@@ -47,7 +53,7 @@ export function useFoodLogs(
       if ('error' in res) {
         put(log)
         onError(res.error)
-      } else put(res.log)
+      } else put(withItems(res.log, log))
     })
   }
 
@@ -58,7 +64,7 @@ export function useFoodLogs(
       if ('error' in res) {
         put(log)
         onError(res.error)
-      } else put(res.log)
+      } else put(withItems(res.log, log))
     })
   }
 
@@ -92,6 +98,8 @@ export function useFoodLogs(
           id: optimisticId,
           meal,
           food_id: food.id,
+          dish_id: null,
+          items: [],
           food_name: food.name,
           quantity,
           eaten: true,
@@ -121,5 +129,50 @@ export function useFoodLogs(
     })
   }
 
-  return { logs, toggle, changeQty, remove, add }
+  /** Agrega un plato (porciones) con eaten=true; siempre es un registro nuevo. */
+  function addDish(dish: Dish, portions: number, meal: Meal) {
+    const optimisticId = `tmp-${++tempSeq.current}`
+    // Solo para mostrar mientras responde el servidor (los triggers calculan
+    // los valores reales).
+    setLogs((ls) => [
+      ...ls,
+      {
+        id: optimisticId,
+        meal,
+        food_id: null,
+        dish_id: dish.id,
+        food_name: dish.name,
+        quantity: portions,
+        eaten: true,
+        ...itemsTotals(dish.items, portions),
+        basis: '100g',
+        unit_label: 'g',
+        grams_per_unit: null,
+        items: dish.items.map((it, i) => {
+          const k = basisFactor(it.basis, it.quantity) * portions
+          return {
+            id: `${optimisticId}-${i}`,
+            food_id: it.food_id,
+            food_name: it.name,
+            quantity: Math.round(it.quantity * portions * 100) / 100,
+            protein: it.protein * k,
+            carbs: it.carbs * k,
+            fat: it.fat * k,
+            basis: it.basis,
+            unit_label: it.unit_label,
+          }
+        }),
+      },
+    ])
+    addDishLog({ date, meal, dishId: dish.id, portions }).then((res) => {
+      if ('error' in res) {
+        setLogs((ls) => ls.filter((l) => l.id !== optimisticId))
+        onError(res.error)
+        return
+      }
+      setLogs((ls) => ls.map((l) => (l.id === optimisticId ? res.log : l)))
+    })
+  }
+
+  return { logs, toggle, changeQty, remove, add, addDish }
 }

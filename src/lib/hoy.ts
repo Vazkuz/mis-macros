@@ -1,6 +1,7 @@
 // Helpers puros de la pantalla Hoy: comidas, fechas y registros (food_logs).
 
-import type { FoodBasis, FoodUnit } from '@/lib/foods'
+import { quantityLabel, type FoodBasis, type FoodUnit } from '@/lib/foods'
+import { portionsLabel } from '@/lib/dishes'
 
 export type Meal = 'desayuno' | 'almuerzo' | 'snack' | 'cena'
 
@@ -61,11 +62,34 @@ export function dayLabel(iso: string): string {
   return `${DIAS[d.getUTCDay()]} ${dd}/${mm}`
 }
 
-/** Fila de food_logs con la medida del alimento (para unidad y equivalencia). */
+/**
+ * Ingrediente de un registro de plato (food_log_items): copia propia de ese
+ * registro. Los macros son TOTALES para `quantity` (los pone un trigger).
+ */
+export type LogItem = {
+  id: string
+  food_id: string | null
+  food_name: string
+  quantity: number
+  protein: number
+  carbs: number
+  fat: number
+  basis: FoodBasis
+  unit_label: FoodUnit
+}
+
+/**
+ * Fila de food_logs con la medida del alimento (para unidad y equivalencia).
+ * Registro de plato: food_id null, dish_id = el plato (null si se borró),
+ * quantity = porciones e `items` = sus ingredientes; sus macros son la suma
+ * de los ingredientes (trigger).
+ */
 export type FoodLog = {
   id: string
   meal: Meal
   food_id: string | null
+  dish_id: string | null
+  items: LogItem[]
   food_name: string
   quantity: number
   eaten: boolean
@@ -81,9 +105,9 @@ export type FoodLog = {
 
 /** Columnas a pedir; `food` es el alimento relacionado (puede ser null si se borró). */
 export const LOG_SELECT =
-  'id, meal, food_id, food_name, quantity, eaten, protein, carbs, fat, kcal, food:foods(basis, unit_label, grams_per_unit)'
+  'id, meal, food_id, dish_id, food_name, quantity, eaten, protein, carbs, fat, kcal, food:foods(basis, unit_label, grams_per_unit)'
 export const LOG_SELECT_PLAIN =
-  'id, meal, food_id, food_name, quantity, eaten, protein, carbs, fat, kcal'
+  'id, meal, food_id, dish_id, food_name, quantity, eaten, protein, carbs, fat, kcal'
 
 const num = (v: unknown) => (v == null || v === '' ? 0 : Number(v))
 
@@ -94,6 +118,9 @@ export function toFoodLog(r: Record<string, unknown>): FoodLog {
     id: String(r.id),
     meal: r.meal as Meal,
     food_id: r.food_id == null ? null : String(r.food_id),
+    dish_id: r.dish_id == null ? null : String(r.dish_id),
+    // Los ingredientes se agregan aparte (attachItems en loadLogs.ts).
+    items: [],
     food_name: String(r.food_name ?? ''),
     quantity: num(r.quantity),
     eaten: Boolean(r.eaten),
@@ -131,4 +158,17 @@ export function macrosFor(
   const carbs = f.carbs * k
   const fat = f.fat * k
   return { protein, carbs, fat, kcal: 4 * protein + 4 * carbs + 9 * fat }
+}
+
+/** ¿Es un registro de plato? (tiene plato o ingredientes propios). */
+export const isDishLog = (l: Pick<FoodLog, 'dish_id' | 'items'>) =>
+  l.dish_id != null || l.items.length > 0
+
+/**
+ * Cantidad de un registro en texto: "150 g", "1 unidad", "2 unidades";
+ * para platos, "Plato" (1 porción) o "1.5 porciones".
+ */
+export function logAmount(l: FoodLog, quantity: number = l.quantity): string {
+  if (isDishLog(l)) return quantity === 1 ? 'Plato' : portionsLabel(quantity)
+  return quantityLabel(l.basis, l.unit_label, quantity)
 }

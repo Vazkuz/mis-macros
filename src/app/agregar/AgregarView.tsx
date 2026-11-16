@@ -92,12 +92,18 @@ export default function AgregarView({
   const { foods, status } = useFoods()
   const favOnly = useSyncExternalStore(subscribeFavOnly, readFavOnly, () => false)
   const { favorites, status: favStatus, isFavorite, toggleFavorite } = useFavorites(toast.show)
+  const favoritesReady = favStatus !== 'loading'
   // Con el filtro: solo destacados, todos (sin tope), en orden alfabético.
-  const { results, total } = useFoodSearch(
+  const { results } = useFoodSearch(
     foods,
     query,
-    favOnly ? { filter: 'destacados', favorites, limit: Infinity } : { favorites }
+    favOnly
+      ? { filter: 'destacados', favorites, favoritesReady, limit: Infinity }
+      : { favorites, favoritesReady }
   )
+  // Contador en vivo: las filas quitadas siguen en la lista hasta la próxima
+  // búsqueda, pero ya no cuentan.
+  const favCount = favOnly ? results.filter((f) => favorites.has(f.id)).length : 0
 
   const searchRef = useRef<HTMLInputElement>(null)
   const qtyRef = useRef<HTMLInputElement>(null)
@@ -404,7 +410,7 @@ export default function AgregarView({
               <p className="px-4 py-3 text-sm text-danger">
                 No se pudo cargar la base. Recarga la página.
               </p>
-            ) : favOnly && favorites.size === 0 ? (
+            ) : favOnly && shown.length === 0 && favorites.size === 0 ? (
               <p className="px-4 py-3 text-sm text-muted">
                 Aún no tienes destacados. Toca ★ en un alimento.
               </p>
@@ -427,7 +433,7 @@ export default function AgregarView({
               </p>
             ) : (
               <>
-                {favOnly && <FavCount n={total} />}
+                {favOnly && <FavCount n={favCount} />}
                 <ul
                   ref={listRef}
                   id="agregar-results"

@@ -34,8 +34,12 @@ export default function AlimentosView({
   const [filter, setFilter] = useState<FoodFilter>('todos')
   const [sheet, setSheet] = useState<SheetState>({ open: false, food: null, seq: 0 })
   const toast = useToast()
-  const { favorites, isFavorite, toggleFavorite } = useFavorites(toast.show)
-  const { results, total } = useFoodSearch(foods, query, { filter, favorites })
+  const { favorites, status: favStatus, isFavorite, toggleFavorite } = useFavorites(toast.show)
+  const { results, total } = useFoodSearch(foods, query, {
+    filter,
+    favorites,
+    favoritesReady: favStatus !== 'loading',
+  })
 
   // `seq` cambia en cada apertura para que el formulario arranque limpio.
   const openSheet = useCallback(

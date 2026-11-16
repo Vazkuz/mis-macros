@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Base de alimentos. Son ~1000 filas: se cargan todas una vez y se buscan en
-// memoria con useFoodSearch (src/lib/useFoodSearch.ts), que también usará
-// el sheet de Hoy.
+// memoria con useFoodSearch (src/lib/useFoodSearch.ts).
+// La columna foods.featured ya no se usa: los destacados son por usuario
+// (tabla user_favorite_foods, hook useFavorites).
 
 export type FoodSource = 'ins' | 'plato' | 'producto'
 export type FoodBasis = '100g' | 'unit'
@@ -20,7 +21,6 @@ export type Food = {
   fat: number
   kcal: number
   ins_code: string | null
-  featured: boolean
 }
 
 export const SOURCE_LABEL: Record<FoodSource, string> = {
@@ -30,7 +30,7 @@ export const SOURCE_LABEL: Record<FoodSource, string> = {
 }
 
 const COLUMNS =
-  'id, name, source, basis, unit_label, grams_per_unit, protein, carbs, fat, kcal, ins_code, featured'
+  'id, name, source, basis, unit_label, grams_per_unit, protein, carbs, fat, kcal, ins_code'
 
 const PAGE = 1000
 
@@ -66,7 +66,6 @@ function toFood(r: Record<string, unknown>): Food {
     fat: n(r.fat),
     kcal: n(r.kcal),
     ins_code: (r.ins_code as string | null) ?? null,
-    featured: Boolean(r.featured),
   }
 }
 
@@ -94,6 +93,7 @@ export function normalize(s: string): string {
     .trim()
 }
 
+/** 'destacados' = los destacados personales del usuario (useFavorites). */
 export type FoodFilter = 'todos' | 'destacados' | FoodSource
 
 export const FOOD_FILTERS: { value: FoodFilter; label: string }[] = [

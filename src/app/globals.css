@@ -31,6 +31,14 @@
   --color-check: #9AA79F;       /* borde del círculo sin marcar */
   --color-del: #B4423A;         /* ícono de borrar en la lista */
   --color-del-bg: #FBEAE8;      /* hover del botón de borrar */
+  --color-icon: #B4B8B5;        /* íconos grises de las filas (lápiz, tacho) */
+  --color-prot-bg: #E8EEFA;     /* pastillas de macros al desplegar una fila */
+  --color-carb-bg: #FBF0E4;
+  --color-fat-bg: #F2ECF8;
+
+  /* Destacados: estrella rellena en ámbar (text-carb) o en contorno gris. */
+  --color-star-off: #B4B8B5;
+  --color-star-bg: #FBF0E4;     /* filtro "Destacados" encendido */
 
   /* Tarjeta oscura de resultado (Meta): línea divisoria y barras de macros
      en tonos claros sobre fondo ink. */

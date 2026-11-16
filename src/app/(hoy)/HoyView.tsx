@@ -1,15 +1,18 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, Trash2 } from 'lucide-react'
+import { Check, Pencil, Trash2 } from 'lucide-react'
 import Toast, { useToast } from '@/components/Toast'
+import FavoriteStar from '@/components/FavoriteStar'
 import { useFabAction } from '@/lib/fab'
 import { round1 } from '@/lib/foods'
 import type { Goals } from '@/lib/metas'
-import { MEALS, MEAL_LABEL, equivalence, qtyUnit, type FoodLog, type Meal } from '@/lib/hoy'
+import { MEALS, MEAL_LABEL, qtyUnit, type FoodLog, type Meal } from '@/lib/hoy'
 import { isTempLog, useFoodLogs } from '@/lib/useFoodLogs'
+import { useFavorites } from '@/lib/useFavorites'
 
 const fmt = (n: number) => Math.round(n).toLocaleString('es-PE')
 
@@ -32,6 +35,9 @@ export default function HoyView({
   const [meal, setMeal] = useState<Meal>(defaultMeal)
   const toast = useToast()
   const { logs, toggle, changeQty, remove } = useFoodLogs(initialLogs, date, toast.show)
+  const { isFavorite, toggleFavorite } = useFavorites(toast.show)
+  // Fila desplegada (macros): solo una a la vez.
+  const [openId, setOpenId] = useState<string | null>(null)
 
   // El botón flotante abre /agregar con la comida y la fecha actuales.
   const agregarHref = `/agregar?meal=${meal}&d=${date}`
@@ -215,6 +221,12 @@ export default function HoyView({
                 <LogRow
                   key={log.id}
                   log={log}
+                  open={openId === log.id}
+                  onOpen={() => setOpenId((id) => (id === log.id ? null : log.id))}
+                  favorite={isFavorite(log.food_id)}
+                  onFavorite={
+                    log.food_id ? () => toggleFavorite(log.food_id!, log.food_name) : null
+                  }
                   onToggle={() => toggle(log)}
                   onQty={(q) => changeQty(log, q)}
                   onDelete={() => removeWithToast(log)}
@@ -236,140 +248,239 @@ export default function HoyView({
         </section>
       </div>
 
-      <Toast text={toast.text} />
+      <Toast text={toast.text} action={toast.action} />
     </>
   )
 }
 
+/** "150 g", "1 unidad" o "2 unidades". */
+function qtyLabel(log: FoodLog, quantity: number): string {
+  const q = round1(quantity).toLocaleString('es-PE')
+  if (log.basis === 'unit') return `${q} ${quantity === 1 ? 'unidad' : 'unidades'}`
+  return `${q} ${log.unit_label}`
+}
+
+const MACRO_PILLS = [
+  { key: 'protein', label: 'Proteína', cls: 'bg-prot-bg text-prot' },
+  { key: 'carbs', label: 'Carbos', cls: 'bg-carb-bg text-carb' },
+  { key: 'fat', label: 'Grasa', cls: 'bg-fat-bg text-fat' },
+] as const
+
+const iconBtn =
+  'inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-icon disabled:cursor-wait'
+
 function LogRow({
   log,
+  open,
+  onOpen,
+  favorite,
+  onFavorite,
   onToggle,
   onQty,
   onDelete,
 }: {
   log: FoodLog
+  open: boolean
+  onOpen: () => void
+  favorite: boolean
+  /** null si el alimento ya no existe (food_id null): no hay estrella. */
+  onFavorite: (() => void) | null
   onToggle: () => void
   onQty: (q: number) => void
   onDelete: () => void
 }) {
   const pending = isTempLog(log.id)
-  const eq = equivalence(log, log.quantity)
-  return (
-    <li className="grid grid-cols-[44px_1fr_auto] items-center gap-1.5 border-t border-line2 py-2.5 first:border-t-0">
-      <button
-        type="button"
-        aria-pressed={log.eaten}
-        aria-label={`${log.eaten ? 'Desmarcar' : 'Marcar'} ${log.food_name} como comido`}
-        onClick={onToggle}
-        disabled={pending}
-        className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-[10px] disabled:cursor-wait"
-      >
-        <span
-          className={`inline-flex h-6 w-6 items-center justify-center rounded-full border-2 ${
-            log.eaten ? 'border-acc bg-acc text-white' : 'border-check'
-          }`}
-        >
-          {log.eaten && <Check size={14} strokeWidth={3.5} aria-hidden="true" />}
-        </span>
-      </button>
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const rowRef = useRef<HTMLLIElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-      <div className="min-w-0">
-        <div
-          className={`text-[15px] leading-tight font-semibold ${log.eaten ? '' : 'text-muted'}`}
-        >
-          {log.food_name}
-        </div>
-        <div className="mt-0.5 text-xs text-muted">
-          {eq && <span className="font-semibold text-acc">{eq} · </span>}
-          <span className="text-prot">P {round1(log.protein)}</span> ·{' '}
-          <span className="text-carb-t">C {round1(log.carbs)}</span> ·{' '}
-          <span className="text-fat">G {round1(log.fat)}</span>
-          {!log.eaten && (
-            <>
-              {' '}
-              · <b>Planificado</b>
-            </>
-          )}
-        </div>
-      </div>
+  const q = parseFloat(draft.replace(',', '.'))
+  const draftOk = Number.isFinite(q) && q > 0
+  // kcal en vivo mientras editas (proporcional a la cantidad guardada).
+  const kcal = editing && draftOk && log.quantity > 0 ? (log.kcal * q) / log.quantity : log.kcal
 
-      <div className="flex flex-col items-end gap-1">
-        {/* key: si la cantidad cambia desde fuera, el input se reinicia */}
-        <QtyInput
-          key={log.quantity}
-          value={log.quantity}
-          unit={qtyUnit(log)}
-          label={`Cantidad de ${log.food_name}`}
-          disabled={pending}
-          onCommit={onQty}
-        />
-        <div className="flex items-center gap-0.5 text-[13px] font-semibold">
-          <span>{fmt(log.kcal)} kcal</span>
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={pending}
-            aria-label={`Quitar ${log.food_name}`}
-            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-del hover:bg-del-bg disabled:cursor-wait"
-          >
-            <Trash2 size={18} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-    </li>
-  )
-}
-
-function QtyInput({
-  value,
-  unit,
-  label,
-  disabled,
-  onCommit,
-}: {
-  value: number
-  unit: string
-  label: string
-  disabled: boolean
-  onCommit: (q: number) => void
-}) {
-  const [draft, setDraft] = useState(String(value))
-  // Esc descarta: el blur que sigue no debe guardar el borrador.
-  const skipCommit = useRef(false)
-
-  function commit() {
-    if (skipCommit.current) {
-      skipCommit.current = false
-      setDraft(String(value))
-      return
+  // Tocar fuera de la fila cancela la edición.
+  useEffect(() => {
+    if (!editing) return
+    const onDown = (e: PointerEvent) => {
+      if (!rowRef.current?.contains(e.target as Node)) setEditing(false)
     }
-    const q = parseFloat(draft.replace(',', '.'))
-    if (Number.isFinite(q) && q > 0) onCommit(Math.round(q * 100) / 100)
-    else setDraft(String(value))
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [editing])
+
+  // iOS solo abre el teclado si focus() corre dentro del mismo toque.
+  function startEdit() {
+    flushSync(() => {
+      setDraft(String(round1(log.quantity)))
+      setEditing(true)
+    })
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }
+
+  function save() {
+    if (!draftOk) return
+    onQty(Math.round(q * 100) / 100)
+    setEditing(false)
   }
 
   return (
-    <div className="flex h-10 w-28 items-center rounded-[10px] border border-line-strong bg-card focus-within:outline-3 focus-within:outline-focus">
-      <input
-        type="number"
-        inputMode="decimal"
-        step="any"
-        min={0}
-        value={draft}
-        disabled={disabled}
-        aria-label={label}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur()
-          if (e.key === 'Escape') {
-            skipCommit.current = true
-            e.currentTarget.blur()
-          }
+    <li ref={rowRef} className="border-t border-line2 first:border-t-0">
+      <div
+        className="grid cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-1 py-1.5"
+        onClick={() => {
+          if (!editing) onOpen()
         }}
-        className="h-[38px] w-full min-w-0 bg-transparent px-1.5 text-right text-base outline-none"
-      />
-      <span className="pr-2 text-[13px] font-semibold text-muted">{unit}</span>
-    </div>
+      >
+        <button
+          type="button"
+          aria-pressed={log.eaten}
+          aria-label={`${log.eaten ? 'Desmarcar' : 'Marcar'} ${log.food_name} como comido`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggle()
+          }}
+          disabled={pending}
+          className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-[10px] disabled:cursor-wait"
+        >
+          <span
+            className={`inline-flex h-6 w-6 items-center justify-center rounded-full border-2 ${
+              log.eaten ? 'border-acc bg-acc text-white' : 'border-check'
+            }`}
+          >
+            {log.eaten && <Check size={14} strokeWidth={3.5} aria-hidden="true" />}
+          </span>
+        </button>
+
+        <div
+          className="min-w-0"
+          role={editing ? undefined : 'button'}
+          tabIndex={editing ? undefined : 0}
+          aria-expanded={editing ? undefined : open}
+          onKeyDown={(e) => {
+            if (editing || e.target !== e.currentTarget) return
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onOpen()
+            }
+          }}
+        >
+          <div
+            className={`text-[15px] leading-tight font-semibold break-words ${log.eaten ? '' : 'text-muted'}`}
+          >
+            {log.food_name}
+          </div>
+          {editing ? (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+              <div className="flex h-9 items-center rounded-[10px] border border-line-strong bg-card focus-within:outline-3 focus-within:outline-focus">
+                <input
+                  ref={inputRef}
+                  type="number"
+                  inputMode="decimal"
+                  enterKeyHint="done"
+                  step="any"
+                  min={0}
+                  value={draft}
+                  aria-label={`Cantidad de ${log.food_name}`}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      save()
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setEditing(false)
+                    }
+                  }}
+                  // 16px a propósito: con menos, el iPhone hace zoom al enfocar.
+                  className="h-[34px] w-16 min-w-0 bg-transparent px-1.5 text-right text-base text-ink outline-none"
+                />
+                <span className="pr-2 text-[13px] font-semibold">{qtyUnit(log)}</span>
+              </div>
+              <span className="whitespace-nowrap">· {fmt(kcal)} kcal</span>
+            </div>
+          ) : (
+            <div className="mt-0.5 text-xs text-muted">
+              {qtyLabel(log, log.quantity)} · {fmt(kcal)} kcal
+            </div>
+          )}
+        </div>
+
+        {/* Ancho fijo (3 × 36px): los íconos nunca se mueven. */}
+        {editing ? (
+          <div className="flex w-[108px] justify-end">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                save()
+              }}
+              disabled={!draftOk}
+              aria-label="Guardar cantidad"
+              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-acc text-white disabled:cursor-not-allowed disabled:bg-disabled"
+            >
+              <Check size={18} strokeWidth={3} aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex w-[108px] items-center justify-end">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                startEdit()
+              }}
+              disabled={pending}
+              aria-label={`Cambiar cantidad de ${log.food_name}`}
+              className={`${iconBtn} hover:bg-bg hover:text-muted`}
+            >
+              <Pencil size={17} aria-hidden="true" />
+            </button>
+            {onFavorite ? (
+              <FavoriteStar on={favorite} name={log.food_name} onToggle={onFavorite} />
+            ) : (
+              <span className="h-9 w-9 shrink-0" aria-hidden="true" />
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              disabled={pending}
+              aria-label={`Quitar ${log.food_name}`}
+              className={`${iconBtn} hover:bg-del-bg hover:text-del`}
+            >
+              <Trash2 size={17} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Macros de la fila: altura animada con grid-template-rows 0fr → 1fr. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+        aria-hidden={!open}
+        inert={!open}
+      >
+        <div className="overflow-hidden">
+          <div className="grid grid-cols-3 gap-2 pb-2.5 pl-12">
+            {MACRO_PILLS.map((m) => (
+              <div
+                key={m.key}
+                className={`flex flex-col items-center rounded-xl px-1 py-2 leading-tight ${m.cls}`}
+              >
+                <span className="num text-lg font-semibold">{Math.round(log[m.key])} g</span>
+                <span className="text-[11px] font-semibold">{m.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </li>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Search, Star } from 'lucide-react'
+import { Search } from 'lucide-react'
 import {
   FOOD_FILTERS,
   MAX_RESULTS,
@@ -13,7 +13,9 @@ import {
 } from '@/lib/foods'
 import { useFoodSearch } from '@/lib/useFoodSearch'
 import { useFabAction } from '@/lib/fab'
+import { useFavorites } from '@/lib/useFavorites'
 import Toast, { useToast } from '@/components/Toast'
+import FavoriteStar from '@/components/FavoriteStar'
 import FoodSheet from './FoodSheet'
 
 // Estado del sheet: cerrado, nuevo, o editando un alimento.
@@ -32,7 +34,8 @@ export default function AlimentosView({
   const [filter, setFilter] = useState<FoodFilter>('todos')
   const [sheet, setSheet] = useState<SheetState>({ open: false, food: null, seq: 0 })
   const toast = useToast()
-  const { results, total } = useFoodSearch(foods, query, filter)
+  const { favorites, isFavorite, toggleFavorite } = useFavorites(toast.show)
+  const { results, total } = useFoodSearch(foods, query, { filter, favorites })
 
   // `seq` cambia en cada apertura para que el formulario arranque limpio.
   const openSheet = useCallback(
@@ -65,7 +68,7 @@ export default function AlimentosView({
           />
         </div>
 
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por fuente">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar">
           {FOOD_FILTERS.map((f) => {
             const on = filter === f.value
             return (
@@ -86,7 +89,9 @@ export default function AlimentosView({
 
         <p className="text-xs text-muted" aria-live="polite">
           {loadError ? (
-            <span className="text-danger">No se pudieron cargar los alimentos. Recarga la página.</span>
+            <span className="text-danger">
+              No se pudieron cargar los alimentos. Recarga la página.
+            </span>
           ) : (
             <>
               Mostrando {results.length} de {total}
@@ -100,7 +105,7 @@ export default function AlimentosView({
             {results.map((f) => (
               <li
                 key={f.id}
-                className="grid grid-cols-[1fr_auto] items-center gap-2 border-t border-line2 py-2.5 first:border-t-0"
+                className="grid grid-cols-[1fr_auto_auto] items-center gap-1 border-t border-line2 py-2.5 first:border-t-0"
               >
                 <div className="min-w-0">
                   <div className="text-[15px] leading-tight font-semibold">
@@ -108,13 +113,6 @@ export default function AlimentosView({
                     <span className="ml-1 inline-block rounded-full bg-bg px-[7px] py-px align-[1px] text-[11px] font-semibold text-muted">
                       {SOURCE_LABEL[f.source]}
                     </span>
-                    {f.featured && (
-                      <Star
-                        size={13}
-                        aria-label="Destacado"
-                        className="ml-1 inline-block fill-carb align-[-1px] text-carb"
-                      />
-                    )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted">
                     {basisLabel(f)} · <span className="text-prot">P {round1(f.protein)}</span> ·{' '}
@@ -135,13 +133,20 @@ export default function AlimentosView({
                     </button>
                   )}
                 </div>
+                <FavoriteStar
+                  on={isFavorite(f.id)}
+                  name={f.name}
+                  onToggle={() => toggleFavorite(f.id, f.name)}
+                />
               </li>
             ))}
           </ul>
         ) : (
           !loadError && (
             <div className="rounded-xl border border-dashed border-line-strong p-[18px] text-center text-sm text-muted">
-              Sin resultados.
+              {filter === 'destacados' && favorites.size === 0
+                ? 'Aún no tienes destacados. Toca ★ en un alimento.'
+                : 'Sin resultados.'}
             </div>
           )
         )}
@@ -157,7 +162,7 @@ export default function AlimentosView({
         />
       )}
 
-      <Toast text={toast.text} />
+      <Toast text={toast.text} action={toast.action} />
     </>
   )
 }

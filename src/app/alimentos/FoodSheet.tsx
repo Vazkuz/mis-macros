@@ -24,7 +24,6 @@ type Draft = {
   protein: string
   carbs: string
   fat: string
-  featured: boolean
 }
 
 function draftFrom(food: Food | null): Draft {
@@ -38,7 +37,6 @@ function draftFrom(food: Food | null): Draft {
       protein: '0',
       carbs: '0',
       fat: '0',
-      featured: false,
     }
   }
   return {
@@ -50,7 +48,6 @@ function draftFrom(food: Food | null): Draft {
     protein: String(food.protein),
     carbs: String(food.carbs),
     fat: String(food.fat),
-    featured: food.featured,
   }
 }
 
@@ -174,7 +171,6 @@ function FoodForm({
       protein: p,
       carbs: c,
       fat: g,
-      featured: draft.featured,
     }
     startTransition(async () => {
       const res = food ? await updateFood(food.id, input) : await createFood(input)
@@ -294,15 +290,6 @@ function FoodForm({
         ))}
       </div>
 
-      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[15px] font-semibold">
-        <input
-          type="checkbox"
-          checked={draft.featured}
-          onChange={(e) => set('featured', e.target.checked)}
-          className="h-5 w-5 cursor-pointer accent-acc"
-        />
-        Destacado
-      </label>
 
       <p className="text-[13px] text-muted" aria-live="polite">
         <b className="text-ink">{Math.round(kcal).toLocaleString('es-PE')} kcal</b> {per}

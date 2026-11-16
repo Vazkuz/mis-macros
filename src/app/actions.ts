@@ -133,7 +133,6 @@ export type FoodInput = {
   protein: number
   carbs: number
   fat: number
-  featured: boolean
 }
 
 type FoodResult = { error: string } | { ok: true }
@@ -167,7 +166,6 @@ function foodRow(f: FoodInput) {
     protein: f.protein,
     carbs: f.carbs,
     fat: f.fat,
-    featured: f.featured,
   }
 }
 

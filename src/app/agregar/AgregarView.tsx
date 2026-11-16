@@ -4,7 +4,17 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ChevronRight, Plus, Search, Star, Trash2, Utensils, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+  Utensils,
+  X,
+} from 'lucide-react'
 import Toast, { useToast } from '@/components/Toast'
 import FavoriteStar from '@/components/FavoriteStar'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -80,6 +90,7 @@ export default function AgregarView({
   initialMeal,
   initialLogs,
   initialDishId,
+  initialQuery = '',
   isAdmin,
 }: {
   date: string
@@ -88,12 +99,14 @@ export default function AgregarView({
   initialLogs: FoodLog[]
   /** ?sel=dish:<id> (al volver de crear un plato): ese plato ya elegido. */
   initialDishId: string | null
+  /** ?q= al volver de editar un plato: el texto de búsqueda que había. */
+  initialQuery?: string
   isAdmin: boolean
 }) {
   const router = useRouter()
   const viewportStyle = useVisibleViewportStyle()
   const [meal, setMeal] = useState<Meal>(initialMeal)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [selected, setSelected] = useState<Selection | null>(null)
   const [pendingDishId, setPendingDishId] = useState(initialDishId)
   const [qty, setQty] = useState('')
@@ -247,6 +260,19 @@ export default function AgregarView({
     }
     // Vuelve a buscar con el buscador vacío y con foco, para seguir agregando.
     backToSearch(true)
+  }
+
+  /**
+   * Abre el editor del plato con ?back= para volver aquí con la comida, el
+   * día, la búsqueda y (si estaba elegido) el plato; los filtros ya viven en
+   * localStorage.
+   */
+  function editDish(dish: Dish) {
+    const back = new URLSearchParams({ meal, d: date })
+    if (query) back.set('q', query)
+    if (selected?.kind === 'dish' && selected.dish.id === dish.id)
+      back.set('sel', `dish:${dish.id}`)
+    router.push(`/platos/${dish.id}?back=${encodeURIComponent(`/agregar?${back}`)}`)
   }
 
   function confirmDelete() {
@@ -587,6 +613,7 @@ export default function AgregarView({
                             ? toggleDishFavorite(e.id)
                             : toggleFavorite(e.id, e.name)
                         }
+                        onEdit={e.kind === 'dish' ? () => editDish(e.dish) : undefined}
                         onDelete={e.kind === 'dish' ? () => setConfirmDish(e.dish) : undefined}
                       />
                     ))}
@@ -615,8 +642,8 @@ export default function AgregarView({
 }
 
 /**
- * Fila de resultado. Alimento: nombre | kcal y base | ★ | hueco del tacho.
- * Plato: ícono y nombre | kcal y "1 porción" | ★ | tacho.
+ * Fila de resultado. Alimento: nombre | kcal y base | hueco | ★ | hueco.
+ * Plato: ícono y nombre | kcal y "1 porción" | lápiz | ★ | tacho.
  */
 function ResultRow({
   entry,
@@ -626,6 +653,7 @@ function ResultRow({
   onPick,
   onHover,
   onFavorite,
+  onEdit,
   onDelete,
 }: {
   entry: CatalogEntry
@@ -635,6 +663,7 @@ function ResultRow({
   onPick: () => void
   onHover: () => void
   onFavorite: () => void
+  onEdit?: () => void
   onDelete?: () => void
 }) {
   const dish = entry.kind === 'dish' ? entry.dish : null
@@ -667,6 +696,23 @@ function ResultRow({
           {dish ? '1 porción' : entry.kind === 'food' ? basisLabel(entry.food) : ''}
         </span>
       </span>
+      {/* Alimentos: huecos del lápiz y del tacho para alinear las estrellas. */}
+      {onEdit ? (
+        <button
+          type="button"
+          aria-label={`Editar ${entry.name}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit()
+          }}
+          className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-icon hover:bg-bg hover:text-muted"
+        >
+          <Pencil size={17} aria-hidden="true" />
+        </button>
+      ) : (
+        <span className="h-9 w-9 shrink-0" aria-hidden="true" />
+      )}
       <FavoriteStar on={favorite} name={entry.name} onToggle={onFavorite} />
       {onDelete ? (
         <button

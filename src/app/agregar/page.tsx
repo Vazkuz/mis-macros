@@ -10,12 +10,13 @@ export const metadata: Metadata = { title: 'Agregar comida · Mis Macros' }
 
 // /agregar?meal=desayuno&d=2026-11-14[&sel=dish:<id>] — pantalla completa (sin Shell).
 // sel: al volver de crear un plato, ese plato aparece ya elegido.
+// q: al volver de editar un plato, el texto de búsqueda que había.
 export default async function AgregarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ d?: string; meal?: string; sel?: string }>
+  searchParams: Promise<{ d?: string; meal?: string; sel?: string; q?: string }>
 }) {
-  const { d, meal, sel } = await searchParams
+  const { d, meal, sel, q } = await searchParams
   const today = todayLima()
   const date = isIsoDate(d) && d <= today ? d : today
   const initialMeal = isMeal(meal) ? meal : mealForHour(hourLima())
@@ -31,6 +32,7 @@ export default async function AgregarPage({
       initialMeal={initialMeal}
       initialLogs={logs ?? []}
       initialDishId={sel?.match(/^dish:(\d+)$/)?.[1] ?? null}
+      initialQuery={typeof q === 'string' ? q.slice(0, 100) : ''}
       isAdmin={admin}
     />
   )

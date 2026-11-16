@@ -8,23 +8,36 @@ import type { Dish } from '@/lib/dishes'
 
 /**
  * /platos/nuevo y /platos/[id]. Al crear vuelve a /agregar con el plato ya
- * elegido; al editar o borrar, vuelve a la pantalla anterior.
+ * elegido; al editar o borrar, vuelve a `backHref` (si se abrió desde
+ * /agregar) o a la pantalla anterior.
  */
 export default function PlatoEditor({
   dish,
   agregarHref,
+  backHref = null,
 }: {
   /** null = plato nuevo. */
   dish: Dish | null
   /** /agregar?meal=&d= (para volver al crear o con ←). */
   agregarHref: string
+  /** ?back= (desde /agregar): a dónde volver al guardar, borrar o tocar ←. */
+  backHref?: string | null
 }) {
   const router = useRouter()
   const { saveDish, deleteDish } = useDishes()
 
   function goBack(fallback: string) {
-    if (window.history.length > 1) router.back()
+    if (backHref) router.replace(backHref)
+    else if (window.history.length > 1) router.back()
     else router.replace(fallback)
+  }
+
+  /** Tras borrar, el plato ya no puede quedar elegido al volver. */
+  function goBackWithout(id: string, fallback: string) {
+    if (!backHref) return goBack(fallback)
+    const url = new URL(backHref, window.location.origin)
+    if (url.searchParams.get('sel') === `dish:${id}`) url.searchParams.delete('sel')
+    router.replace(`${url.pathname}${url.search}`)
   }
 
   if (!dish) {
@@ -70,7 +83,7 @@ export default function PlatoEditor({
           return 'No se pudo eliminar el plato. Inténtalo de nuevo.'
         }
         flashToast(`${dish.name} eliminado`)
-        goBack('/alimentos')
+        goBackWithout(dish.id, '/alimentos')
         return null
       }}
     />

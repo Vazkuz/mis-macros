@@ -7,8 +7,17 @@ import PlatoEditor from '../PlatoEditor'
 export const metadata: Metadata = { title: 'Editar plato · Mis Macros' }
 
 // /platos/[id] — pantalla completa (sin Shell). RLS: solo el dueño lo ve.
-export default async function EditarPlatoPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditarPlatoPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ back?: string }>
+}) {
   const { id } = await params
+  const { back } = await searchParams
+  // ?back= solo puede volver a /agregar (nada de URLs externas).
+  const backHref = typeof back === 'string' && /^\/agregar(\?|$)/.test(back) ? back : null
   if (!/^\d+$/.test(id)) notFound()
 
   const supabase = await createClient()
@@ -21,5 +30,5 @@ export default async function EditarPlatoPage({ params }: { params: Promise<{ id
   if (!data) notFound()
 
   const dish = toDish(data as unknown as Record<string, unknown>)
-  return <PlatoEditor key={dish.id} dish={dish} agregarHref="/agregar" />
+  return <PlatoEditor key={dish.id} dish={dish} agregarHref="/agregar" backHref={backHref} />
 }

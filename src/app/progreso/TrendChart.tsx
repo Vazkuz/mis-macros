@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ddmm, fmtNum } from '@/lib/progreso'
 
 type Point = { date: string; value: number }
+/** Franja saludable: `lo` null = sin borde inferior. */
+export type Band = { lo: number | null; hi: number; label: string }
 
 const H = 190
 const PAD = { top: 14, right: 12, bottom: 24, left: 38 }
@@ -19,11 +21,17 @@ const dayNum = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000
 export default function TrendChart({
   points,
   goal,
+  band = null,
+  extent = [],
   label,
 }: {
   /** Ordenados de la más antigua a la más reciente. */
   points: Point[]
   goal: number | null
+  /** Se dibuja detrás de la línea, recortada al rango Y visible. */
+  band?: Band | null
+  /** Valores extra que el rango Y debe incluir (p. ej. el borde superior de la franja). */
+  extent?: number[]
   label: string
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -40,7 +48,7 @@ export default function TrendChart({
   }, [])
 
   const values = points.map((p) => p.value)
-  const all = goal != null ? [...values, goal] : values
+  const all = [...values, ...(goal != null ? [goal] : []), ...extent]
   const min = Math.min(...all)
   const max = Math.max(...all)
   // Margen para que los puntos no toquen el borde; con un solo valor, ±1.
@@ -58,6 +66,13 @@ export default function TrendChart({
   const xOf = (iso: string) => (d1 === d0 ? (x0 + x1) / 2 : x0 + ((dayNum(iso) - d0) / (d1 - d0)) * (x1 - x0))
   const yOf = (v: number) => y1 - ((v - lo) / (hi - lo)) * (y1 - y0)
 
+  // Tramo de la franja que cae dentro del rango Y visible.
+  const bandTop = band ? Math.min(band.hi, hi) : 0
+  const bandBottom = band ? Math.max(band.lo ?? -Infinity, lo) : 0
+  const showBand = band != null && bandTop > bandBottom
+  const bandY = showBand ? yOf(bandTop) : 0
+  const bandH = showBand ? yOf(bandBottom) - bandY : 0
+
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${xOf(p.date).toFixed(1)},${yOf(p.value).toFixed(1)}`).join(' ')
   const first = points[0]
   const last = points[points.length - 1]
@@ -72,6 +87,22 @@ export default function TrendChart({
         aria-label={label}
         className="block overflow-visible"
       >
+        {showBand && (
+          <g>
+            <rect x={x0} y={bandY} width={x1 - x0} height={bandH} className="fill-acc-soft" />
+            {bandH >= 16 && (
+              <text
+                x={x1 - 4}
+                y={bandY + 12}
+                textAnchor="end"
+                className="fill-acc text-[10px] font-semibold"
+              >
+                {band.label}
+              </text>
+            )}
+          </g>
+        )}
+
         {/* Guías del mínimo y el máximo */}
         {[min, max].map((v, i) =>
           i === 1 && max === min ? null : (

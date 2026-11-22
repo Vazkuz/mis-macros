@@ -18,6 +18,13 @@ export const WAIST_MIN = 40
 export const WAIST_MAX = 200
 /** Cintura/altura por debajo de este valor se considera saludable. */
 export const RATIO_SALUDABLE = 0.5
+/** IMC saludable: de 18.5 a 24.9. */
+export const BMI_MIN = 18.5
+export const BMI_MAX = 24.9
+/** Límites de la meta de peso (profiles.weight_goal_kg). */
+export const WEIGHT_GOAL_MIN = 30
+export const WEIGHT_GOAL_MAX = 250
+export const ERR_PESO_META = `El peso meta debe estar entre ${WEIGHT_GOAL_MIN} y ${WEIGHT_GOAL_MAX} kg.`
 
 const numOrNull = (v: unknown) => (v == null || v === '' ? null : Number(v))
 
@@ -37,6 +44,19 @@ export const sortDesc = (ms: Measurement[]) =>
 /** Meta de cintura: la mitad de la talla, redondeada a 0.5 cm. */
 export const waistGoalFor = (heightCm: number | null) =>
   heightCm && heightCm > 0 ? Math.round(heightCm * 0.5 * 2) / 2 : null
+
+/**
+ * Rango de peso saludable para la talla: IMC 18.5–24.9, a 1 decimal.
+ * Con 170 cm → { lo: 53.5, hi: 72 }.
+ */
+export function healthyWeightRange(heightCm: number | null): { lo: number; hi: number } | null {
+  if (!heightCm || heightCm <= 0) return null
+  const h2 = (heightCm / 100) ** 2
+  return { lo: Math.round(BMI_MIN * h2 * 10) / 10, hi: Math.round(BMI_MAX * h2 * 10) / 10 }
+}
+
+/** IMC (ya redondeado a 1 decimal) dentro del rango saludable. */
+export const healthyBmi = (bmi: number) => bmi >= BMI_MIN && bmi <= BMI_MAX
 
 /** Hasta `max` decimales, sin ceros sobrantes ("92", "92.5"). */
 export function fmtNum(n: number, max = 1): string {
@@ -87,12 +107,24 @@ export type Summary = {
   /** Cintura/altura redondeado a 2 decimales. */
   ratio: number | null
   weight: number | null
+  firstWeight: number | null
   weightDelta: number | null
   bmi: number | null
+  weightGoal: number | null
+  /** 0–1: avance desde el primer peso hasta la meta de peso (sube o baja). */
+  weightProgress: number
+  /** El último peso ya cruzó la meta en la dirección correcta. */
+  weightGoalReached: boolean
+  /** Rango de peso saludable (IMC 18.5–24.9) o null sin talla. */
+  weightRange: { lo: number; hi: number } | null
 }
 
 /** Indicadores de la pantalla. `ms` ordenadas de la más reciente a la más antigua. */
-export function summarize(ms: Measurement[], heightCm: number | null): Summary | null {
+export function summarize(
+  ms: Measurement[],
+  heightCm: number | null,
+  weightGoal: number | null = null
+): Summary | null {
   if (!ms.length) return null
   const waists = ms.filter((m) => m.waistCm != null).map((m) => m.waistCm as number)
   const weights = ms.filter((m) => m.weightKg != null).map((m) => m.weightKg as number)
@@ -110,7 +142,20 @@ export function summarize(ms: Measurement[], heightCm: number | null): Summary |
   }
 
   const weight = weights[0] ?? null
+  const firstWeight = weights.length ? weights[weights.length - 1] : null
   const h = heightCm && heightCm > 0 ? heightCm / 100 : null
+
+  // Meta de peso: la dirección la da el primer peso (bajar si estaba por
+  // encima o igual, subir si estaba por debajo).
+  let weightProgress = 0
+  let weightGoalReached = false
+  if (weight != null && firstWeight != null && weightGoal != null) {
+    weightGoalReached = firstWeight >= weightGoal ? weight <= weightGoal : weight >= weightGoal
+    if (weightGoalReached) weightProgress = 1
+    else if (firstWeight !== weightGoal) {
+      weightProgress = Math.min(1, Math.max(0, (firstWeight - weight) / (firstWeight - weightGoal)))
+    }
+  }
 
   return {
     latest: ms[0],
@@ -121,7 +166,12 @@ export function summarize(ms: Measurement[], heightCm: number | null): Summary |
     progress,
     ratio: waist != null && heightCm ? Math.round((waist / heightCm) * 100) / 100 : null,
     weight,
+    firstWeight,
     weightDelta: weights.length > 1 ? weights[0] - weights[1] : null,
     bmi: weight != null && h ? Math.round((weight / (h * h)) * 10) / 10 : null,
+    weightGoal,
+    weightProgress,
+    weightGoalReached,
+    weightRange: healthyWeightRange(heightCm),
   }
 }

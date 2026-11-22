@@ -2,12 +2,16 @@ import { Bone, CardBones, Loading, twoCols } from '@/components/Skeleton'
 
 const darkBone = 'animate-pulse rounded-xl bg-ink-line motion-reduce:animate-none'
 
-// Peso y cintura: tarjeta oscura de cintura + Peso y Última medición a la
-// izquierda; gráfico e historial a la derecha.
+// Peso y cintura: selector Peso/Cintura arriba; tarjeta oscura + tarjeta chica
+// y Última medición a la izquierda; gráfico e historial a la derecha.
 export default function ProgresoLoading() {
   return (
     <Loading>
       <h1 className="text-[26px]">Peso y cintura</h1>
+      <div aria-hidden="true" className="flex gap-1.5">
+        <Bone className="h-10 w-16" />
+        <Bone className="h-10 w-20" />
+      </div>
       <div className={twoCols}>
         <div className="flex flex-col gap-3.5">
           <div aria-hidden="true" className="flex flex-col gap-3 rounded-2xl bg-ink p-4">
@@ -15,7 +19,10 @@ export default function ProgresoLoading() {
             <div className={`h-12 w-32 ${darkBone}`} />
             <div className={`h-2 w-full rounded-full ${darkBone}`} />
             <div className={`h-4 w-full ${darkBone}`} />
-            <div className={`h-4 w-full ${darkBone}`} />
+            <div className="flex flex-col gap-2 border-t border-ink-line pt-2">
+              <div className={`h-4 w-full ${darkBone}`} />
+              <div className={`h-4 w-full ${darkBone}`} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             {[0, 1].map((i) => (
@@ -29,10 +36,6 @@ export default function ProgresoLoading() {
         </div>
         <div className="flex flex-col gap-3.5">
           <CardBones>
-            <div className="flex gap-1.5">
-              <Bone className="h-10 w-20" />
-              <Bone className="h-10 w-16" />
-            </div>
             <Bone className="h-[190px] w-full" />
           </CardBones>
           <CardBones>

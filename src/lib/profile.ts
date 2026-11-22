@@ -12,6 +12,7 @@ export type ProfileData = {
   pace: Pace | null
   proteinPerKg: number | null
   fatPerKg: number | null
+  weightGoalKg: number | null
 }
 
 export type LastWeight = { weightKg: number; measuredOn: string } | null
@@ -25,7 +26,7 @@ export async function loadProfileAndWeight(
   const [{ data: p }, { data: w }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('sex, birth_date, height_cm, activity, pace, protein_g_per_kg, fat_g_per_kg')
+      .select('sex, birth_date, height_cm, activity, pace, protein_g_per_kg, fat_g_per_kg, weight_goal_kg')
       .eq('id', userId)
       .maybeSingle(),
     supabase
@@ -47,6 +48,7 @@ export async function loadProfileAndWeight(
       pace: p?.pace ?? null,
       proteinPerKg: num(p?.protein_g_per_kg),
       fatPerKg: num(p?.fat_g_per_kg),
+      weightGoalKg: num(p?.weight_goal_kg),
     },
     lastWeight: w ? { weightKg: Number(w.weight_kg), measuredOn: String(w.measured_on) } : null,
   }

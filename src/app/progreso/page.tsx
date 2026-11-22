@@ -12,7 +12,7 @@ export default async function Page() {
   const userId = user?.id ?? ''
 
   const [{ data: profile }, measurements] = await Promise.all([
-    supabase.from('profiles').select('height_cm').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('height_cm, weight_goal_kg').eq('id', userId).maybeSingle(),
     loadMeasurements(),
   ])
 
@@ -33,6 +33,7 @@ export default async function Page() {
   }
 
   const height = profile?.height_cm != null ? Number(profile.height_cm) : null
+  const weightGoal = profile?.weight_goal_kg != null ? Number(profile.weight_goal_kg) : null
 
   return (
     <>
@@ -41,6 +42,7 @@ export default async function Page() {
         initial={measurements ?? []}
         loadError={measurements === null}
         heightCm={height && height > 0 ? height : null}
+        weightGoalKg={weightGoal && weightGoal > 0 ? weightGoal : null}
         today={todayLima()}
       />
     </>

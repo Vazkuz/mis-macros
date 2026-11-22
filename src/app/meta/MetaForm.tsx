@@ -7,6 +7,14 @@ import { saveMeta } from '@/app/actions'
 import Toast, { useToast } from '@/components/Toast'
 import type { ProfileData } from '@/lib/profile'
 import {
+  ERR_PESO_META,
+  WEIGHT_GOAL_MAX,
+  WEIGHT_GOAL_MIN,
+  fmtNum,
+  healthyWeightRange,
+  parseDecimal,
+} from '@/lib/progreso'
+import {
   ACTIVITIES,
   PACES,
   computeGoals,
@@ -25,6 +33,7 @@ type Editable = {
   height: string
   activity: Activity | null
   pace: Pace | null
+  weightGoal: string
 }
 
 function toEditable(p: MetaProfile): Editable {
@@ -34,7 +43,14 @@ function toEditable(p: MetaProfile): Editable {
     height: p.heightCm != null ? String(p.heightCm) : '',
     activity: p.activity,
     pace: p.pace,
+    weightGoal: p.weightGoalKg != null ? String(p.weightGoalKg) : '',
   }
+}
+
+/** Clave para comparar la meta de peso: "68" y "68,0" son lo mismo; vacío = sin meta. */
+const goalKey = (s: string) => {
+  const n = parseDecimal(s)
+  return n == null ? '' : Number.isNaN(n) ? s.trim() : String(n)
 }
 
 const sameEditable = (a: Editable, b: Editable) =>
@@ -42,7 +58,8 @@ const sameEditable = (a: Editable, b: Editable) =>
   a.birthDate === b.birthDate &&
   Number(a.height || NaN) === Number(b.height || NaN) &&
   a.activity === b.activity &&
-  a.pace === b.pace
+  a.pace === b.pace &&
+  goalKey(a.weightGoal) === goalKey(b.weightGoal)
 
 const fmt = (n: number) => Math.round(n).toLocaleString('es-PE')
 const fmtKg = (n: number) => n.toFixed(2)
@@ -95,6 +112,8 @@ export default function MetaForm({
     [form, weightKg, initial.proteinPerKg, initial.fatPerKg]
   )
 
+  const healthyRange = healthyWeightRange(parseNum(form.height))
+
   const weightDirty = !lastMeasurement && weightInput.trim() !== ''
   const dirty = !sameEditable(form, baseline) || weightDirty
 
@@ -113,6 +132,13 @@ export default function MetaForm({
     if (!form.pace) return setError('Elige tu objetivo.')
     const newWeight = weightDirty ? parseNum(weightInput) : null
     if (weightDirty && !newWeight) return setError('Revisa tu peso.')
+    const weightGoalKg = parseDecimal(form.weightGoal)
+    if (
+      weightGoalKg != null &&
+      !(weightGoalKg >= WEIGHT_GOAL_MIN && weightGoalKg <= WEIGHT_GOAL_MAX)
+    ) {
+      return setError(ERR_PESO_META)
+    }
 
     const sex = form.sex
     const activity = form.activity
@@ -125,6 +151,7 @@ export default function MetaForm({
         activity,
         pace,
         weightKg: newWeight,
+        weightGoalKg,
       })
       if ('error' in res) {
         setError(res.error)
@@ -330,6 +357,27 @@ export default function MetaForm({
                 </p>
               </>
             )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="weightGoal" className="text-sm font-semibold">
+              Peso meta (kg)
+            </label>
+            <input
+              id="weightGoal"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="68"
+              value={form.weightGoal}
+              onChange={(e) => set('weightGoal', e.target.value)}
+              className={inputClass}
+            />
+            <p className="text-xs text-muted">
+              {healthyRange
+                ? `Opcional. Tu rango saludable es ${fmtNum(healthyRange.lo)}–${fmtNum(healthyRange.hi)} kg.`
+                : 'Opcional.'}
+            </p>
           </div>
         </section>
 

@@ -21,6 +21,9 @@ import {
   ERR_FECHA_OCUPADA,
   ERR_NINGUNO,
   ERR_PESO,
+  ERR_PESO_META,
+  WEIGHT_GOAL_MAX,
+  WEIGHT_GOAL_MIN,
   MEASUREMENT_SELECT,
   toMeasurement,
   validWaist,
@@ -64,10 +67,12 @@ export type MetaInput = {
   pace: Pace
   /** Solo si el usuario aún no tiene ninguna medición: crea una con fecha de hoy. */
   weightKg?: number | null
+  /** Meta de peso opcional (null = sin meta). */
+  weightGoalKg: number | null
 }
 
 export async function saveMeta(input: MetaInput): Promise<{ error: string } | { ok: true }> {
-  const { sex, birthDate, heightCm, activity, pace, weightKg } = input
+  const { sex, birthDate, heightCm, activity, pace, weightKg, weightGoalKg } = input
 
   if (sex !== 'm' && sex !== 'f') return { error: 'Elige Hombre o Mujer.' }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) || birthDate >= todayLima()) {
@@ -81,6 +86,14 @@ export async function saveMeta(input: MetaInput): Promise<{ error: string } | { 
   if (weightKg != null && (!Number.isFinite(weightKg) || weightKg < 30 || weightKg > 300)) {
     return { error: 'El peso debe estar entre 30 y 300 kg.' }
   }
+  if (
+    weightGoalKg != null &&
+    (!Number.isFinite(weightGoalKg) ||
+      weightGoalKg < WEIGHT_GOAL_MIN ||
+      weightGoalKg > WEIGHT_GOAL_MAX)
+  ) {
+    return { error: ERR_PESO_META }
+  }
 
   const supabase = await createClient()
   const {
@@ -92,7 +105,14 @@ export async function saveMeta(input: MetaInput): Promise<{ error: string } | { 
   // bloqueado por RLS), que de otro modo no devuelve error.
   const { data: actualizados, error } = await supabase
     .from('profiles')
-    .update({ sex, birth_date: birthDate, height_cm: heightCm, activity, pace })
+    .update({
+      sex,
+      birth_date: birthDate,
+      height_cm: heightCm,
+      activity,
+      pace,
+      weight_goal_kg: weightGoalKg,
+    })
     .eq('id', user.id)
     .select('id')
   if (error || !actualizados?.length) {
@@ -120,6 +140,7 @@ export async function saveMeta(input: MetaInput): Promise<{ error: string } | { 
   }
 
   revalidatePath('/meta')
+  revalidatePath('/progreso')
   return { ok: true }
 }
 

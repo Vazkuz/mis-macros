@@ -258,7 +258,8 @@ export default function ProgresoView({
                 points={points}
                 goal={isWeight ? summary.weightGoal : summary.waistGoal}
                 band={band}
-                extent={isWeight && range ? [range.hi] : []}
+                unit={isWeight ? 'kg' : 'cm'}
+                currentYear={currentYear}
                 label={
                   isWeight
                     ? 'Evolución del peso frente al rango saludable'
